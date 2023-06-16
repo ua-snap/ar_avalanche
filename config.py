@@ -31,9 +31,9 @@ dataset = 'reanalysis-era5-single-levels'
 varnames = ['vertical_integral_of_eastward_water_vapour_flux',
            'vertical_integral_of_northward_water_vapour_flux'
            ]
-start_year = 1993
+start_year = 2019
 end_year = 2023
-bbox = [60, -150, 50, -130]
+bbox = [66, -179, 40, -130]
 
 era5_kwargs = {
     "variable": varnames,
