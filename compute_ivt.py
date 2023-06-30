@@ -44,7 +44,7 @@ def compute_direction(u, v):
     Returns
     -------
     xarray.DataArray
-        direction that the the vapor transport is coming from in degrees with respect to true north (0=north, 90=east, 180=south, 270=west)
+        Direction the vapor transport is coming from in degrees with respect to true north (0=north, 90=east, 180=south, 270=west)
     """
     func = lambda x, y: 270 - ((180 / np.pi) * np.arctan2(x, y))
     return xr.apply_ufunc(func, u, v, dask='parallelized')
@@ -58,12 +58,12 @@ def generate_start_end_doys(day_of_year, window):
     day_of_year : (int)
         DOY for which to center the time window
     window : (int)
-        time window length in days
+        Time window length in days
 
     Returns
     -------
     tuple
-        two-tuple of integer DOYs representing the start and end of the time window 
+        Two-tuple of integer DOYs representing the start and end of the time window 
     """
     half_window = window // 2
     # check leap year
@@ -150,13 +150,36 @@ def compute_quantiles_for_doy_range(da, doy_start, doy_stop, window, target_quan
     return combined_da
 
 
+def add_time_coordinate_to_ivt_quantile(ds):
+    """Add time coordinates to the ivt_quantile DataArray based on day-of-year (`doy`). The resulting DataArray will have a time coordinate that corresponds to the `time` coordinate of the DataSet. This is done so that time slicing will yield both the quantile and the IVT magnitude and direction and to reduce the dimensionality of the output dataset as it allows the dropping of the `doy` dimension.
+
+    Parameters
+    ----------
+    ds : xarray.Dataset
+        Input dataset containing the ivt_quantile DataArray
+
+    Returns
+    -------
+    xarray.DataArray
+        Updated ivt_quantile DataArray with time coordinate added
+    """
+    ivt_quantile_da = ds["ivt_quantile"]
+    # remap ivt_quantile values to the time coordinate based on doy
+    time_coord = ds["time"].dt.dayofyear
+    ivt_quantile_time = ivt_quantile_da.sel(doy=time_coord)
+    ivt_quantile_time = ivt_quantile_time.assign_coords(time=ds["time"])
+
+    return ivt_quantile_time
+
+
+
 def compute_full_ivt_datacube(era5_fp, ar_params, ard_fp):
     """Open the downloaded ERA5 dataset, compute IVT magnitude, direction, quantile and write results to new .nc file to use as input for AR detection.
 
     Parameters
     ----------
     era5_fp : pathlib.Path
-        Path to downloaded input ERA5 data
+        Path to downloaded input ERA5 dataa
     ar_params : dict
         Guan & Waliser (2015) inspired parameters
     ard_fp : pathlib.Path
@@ -170,8 +193,8 @@ def compute_full_ivt_datacube(era5_fp, ar_params, ard_fp):
         # add DOY coords to input dataset
         dsc = ds.assign_coords(doy=ds.time.dt.dayofyear)
         # p71.162 / p72.162 codes for eastward "u" / northward "v" components
-        dsc["ivt_mag"] = compute_magnitude(dsc["p71.162"], dsc["p72.162"]).astype(int)
-        dsc["ivt_dir"] = compute_direction(dsc["p71.162"], dsc["p72.162"]).astype(int) 
+        dsc["ivt_mag"] = compute_magnitude(dsc["p71.162"], dsc["p72.162"])
+        dsc["ivt_dir"] = compute_direction(dsc["p71.162"], dsc["p72.162"])
 
         # CP note: leaving this for potential future optimization
         # chunk to avoid memory error
@@ -181,8 +204,13 @@ def compute_full_ivt_datacube(era5_fp, ar_params, ard_fp):
         qth_target_quantile = ar_params["ivt_percentile"] / 100
         
         dsc["ivt_quantile"] = compute_quantiles_for_doy_range(dsc["ivt_mag"], 1, 367, time_window_days, qth_target_quantile)
+
+        dsc["ivt_quantile"] = add_time_coordinate_to_ivt_quantile(dsc)
+        
         # the raw east / north components are not needed in the output
         dsc = dsc.drop_vars(["p71.162", "p72.162"])
+        # DOY dimension also no longer needed after time coordinate mapping
+        dsc = dsc.drop_dims("doy")
         # write to disk
         dsc.to_netcdf(ard_fp)
 
