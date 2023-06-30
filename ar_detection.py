@@ -7,63 +7,85 @@ from scipy.ndimage import label, generate_binary_structure, labeled_comprehensio
 from skimage.measure import regionprops
 
 
+def compute_intensity_mask(ivt_mag, ivt_quantile, ivt_floor):
+    """Compute IVT mask where IVT magnitude exceeds quantile and floor values.
 
-# IVT intensity masking
-# use to identify where IVT magnitude > IVT percentile and IVT magnitude > IVT floor
-# values meeting criteria will keep their IVT magnitude values
-# values not meeting criteria will be assigned NA
-def intensity_mask(ivt_mag, ivt_pctile, ivt_floor):
-    func = lambda x, y, z: xr.where((x>y) & (x>z), x, 0)
-    return xr.apply_ufunc(func, ivt_mag, ivt_pctile, ivt_floor, dask='parallelized')
+    Parameters
+    ----------
+    ivt_mag : xarray.DataArray
+        IVT magntiude
+    ivt_quantile : xarray.DataArray
+        IVT quantile values used for thresholding
+    ivt_floor : int
+        Minimum IVT value for threshold consideration
 
-# Labeling and cataloging continuous geometric regions
-# regions will be labeled with a unique numeric identifier at each timestep
-# output will be a data cube with the same dimensions as the intensity mask input
-def label_regions(mask):     
-    # set search structure to find contiguous regions...this structure will include diagonal neighbors
+    Returns
+    -------
+    xarray.DataArray
+        IVT magnitude values where the magnitude exceeds the quantile and the IVT floor. Else, zero.
+    """
+    func = lambda x, y, z: xr.where((x > y) & (x > z), x, 0)
+    return xr.apply_ufunc(func, ivt_mag, ivt_quantile, ivt_floor, dask='parallelized')
+
+
+def label_contiguous_mask_regions(ivt_mask):
+    """Label contiguous geometric regions of IVT values that exceed the targent quantile and floor for each time step. Each        region is labeled with a unique integer identifier. Output will have the same dimensions as the IVT intensity mask          input and be reprojected to 3338 with a prescribed grid size in meters.
+    Parameters
+    ----------
+    ivt_mask : xarray.DataArray
+        IVT magnitude where the valuyes exceed the quantile and IVT floor.
+
+    Returns
+    -------
+    xarray.DataArray
+        _description_
+    """
+    # set search structure to include diagonal neighbors
     s = generate_binary_structure(2,2)
     
-    # copy mask data array to new da variable, and also:
-    # rename the variable
-    # assign all values as NA
-    # this is now a template data array with same size/dimensions as the input to store region labeling results
+    # intialize the output by copying ivt_mask, renaming it, and setting all values to a known no data value
+    # this constructs a template DataArray with the same size/dimensions as the input to store region labeling results
+    da = ivt_mask.copy(deep=False).rename('regions').where(ivt_mask.values == -9999)
     
-    da = mask.copy(deep=False).rename('regions').where(mask.values == -9999)
-    
-    # loop thru input mask data array over time dimension
-    # label continuous regions using search structure for each timestep
-    # assign the new region array values to the proper timestep in the empty template array
-
-    for a in range(len(mask.time)):
-        labeled_array, num_features = label(mask[a].values, structure=s)
+    # CP note: looping through the time dimension is likely a chokepoint
+    # this is a good candidate for parallelization
+    for a in range(len(ivt_mask.time)):
+        # label contiguous regions of each timestep
+        labeled_array, num_features = label(ivt_mask[a].values, structure=s)
+        # map labeled regions to the timestep in the template array
         da[a] = labeled_array
- 
-    return da
+    # prescribe CRS
+    da.rio.write_crs("epsg:4326", inplace=True)
+    # reproject to 3338 with 1000m (10km) grid cells
+    # NoData set to 0: this is a categorical raster where all non-zero values are region labels
+    da_3338 = da.rio.reproject("epsg:3338", resolution=10000, nodata=0, resampling=rasterio.enums.Resampling.nearest)
+    return da_3338
 
-
-
-
-# filtering by geometry
-# this function will alter the labeled regions data array in place, removing labels that dont meet shape criteria
-# if they have labeled regions, reproject individual 2D region arrays to a 1km grid;
-# (image measurements are given in "pixel" units, so with a 1km grid we can directly compare shape criteria in km)
-# apply regionprops function to array at each timestep;
-# identify any region label where properties do not meet provided minimum length criteria and minimum 2:1 length/width ratio criteria
-# create drop dictionary with timestep as key and labels as values
-# use the drop dictionary to do another loop thru the original dataset and reassign dropped labels to 0
-# ***** Note that since this function uses the entire spatial domain for geometric shape detection, we should not use dask chunking along x/y dimensions!
 
 def filter_regions_by_geometry(regions, min_axis_length):
+    """Modify the labeled regions DataArray in place by removing regions not meeting AR shape criteria. Note that this function uses the entire spatial domain for shape measurement, so dask chunking along lat/lon dimensions should be avoided. Timesteps with labeled regions will be reprojected to a 1km grid and each region within the timestep to measure properties of the major and minor axes of the region's shape. Regions not meeting shape criteria will be added to a "drop" dictionary using the timestep as a key.
+
+    Parameters
+    ----------
+    regions : xarray.DataArray
+        labeled regions of contiguous IVT quantile and floor exceedance
+    min_axis_length : int
+        units in km
+
+    Returns
+    -------
+    _type_
+        _description_
+    """
     # establish CRS as WGS84
     regions.rio.write_crs("epsg:4326", inplace=True)
     
     drop_dict = {}
     
-    for a in regions:
+    for labeled_time_slice in regions:
         
-        # check if there are actually any labeled regions, to avoid reprojections on empty arrays
         # arrays with no regions should only have one unique value (0)
-        if len(np.unique(a.values)) > 1:
+        if len(np.unique(labeled_time_slice.values)) > 1:
         
             #reproject to epsg:3338 with 1000m (1km) grid cells
             # no data is 0 since this is a categorical raster where all non-zero values are region labels
@@ -83,7 +105,7 @@ def filter_regions_by_geometry(regions, min_axis_length):
             
             if len(drop_list) > 0:
                 drop_dict[a_3338.time.values] = drop_list
-           
+    # use the drop dictionary to do another loop thru the original dataset and reassign dropped labels to 0
     for d in drop_dict: 
         regions.loc[dict(time=d)]  = xr.where(regions.sel(time=d).isin(drop_dict[d]), 0, regions.sel(time=d))
          
