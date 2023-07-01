@@ -1,10 +1,12 @@
 # this AR detection script will store a set of functions designed to be run from a notebook.
 import xarray as xr
 import numpy as np
-import rioxarray
 import rasterio
 from scipy.ndimage import label, generate_binary_structure, labeled_comprehension
 from skimage.measure import regionprops
+from scipy.stats import circmean
+
+from config import ar_params, spatial_resolution_reprojected
 
 
 def compute_intensity_mask(ivt_mag, ivt_quantile, ivt_floor):
@@ -29,7 +31,8 @@ def compute_intensity_mask(ivt_mag, ivt_quantile, ivt_floor):
 
 
 def label_contiguous_mask_regions(ivt_mask):
-    """Label contiguous geometric regions of IVT values that exceed the targent quantile and floor for each time step. Each        region is labeled with a unique integer identifier. Output will have the same dimensions as the IVT intensity mask          input and be reprojected to 3338 with a prescribed grid size in meters.
+    """Label contiguous geometric regions of IVT values that exceed the targent quantile and floor for each time step. Each region is labeled with a unique integer identifier. Output will have the same dimensions as the IVT intensity mask     input and be reprojected to 3338 with a prescribed grid size in meters.
+
     Parameters
     ----------
     ivt_mask : xarray.DataArray
@@ -38,7 +41,7 @@ def label_contiguous_mask_regions(ivt_mask):
     Returns
     -------
     xarray.DataArray
-        _description_
+        Labeled (with unique integers) discrete and contiguous regions of IVT threshold exceedance.
     """
     # set search structure to include diagonal neighbors
     s = generate_binary_structure(2,2)
@@ -54,159 +57,149 @@ def label_contiguous_mask_regions(ivt_mask):
         labeled_array, num_features = label(ivt_mask[a].values, structure=s)
         # map labeled regions to the timestep in the template array
         da[a] = labeled_array
+
     # prescribe CRS
     da.rio.write_crs("epsg:4326", inplace=True)
-    # reproject to 3338 with 1000m (10km) grid cells
-    # NoData set to 0: this is a categorical raster where all non-zero values are region labels
-    da_3338 = da.rio.reproject("epsg:3338", resolution=10000, nodata=0, resampling=rasterio.enums.Resampling.nearest)
+    # reproject to 3338 with prescribed grid cell size, set NoData values to 0
+    da_3338 = da.rio.reproject("epsg:3338", resolution=spatial_resolution_reprojected,
+                               nodata=0, resampling=rasterio.enums.Resampling.nearest)
+    # return a categorical raster where all non-zero values are region labels
     return da_3338
 
 
 def filter_regions_by_geometry(regions, min_axis_length):
-    """Modify the labeled regions DataArray in place by removing regions not meeting AR shape criteria. Note that this function uses the entire spatial domain for shape measurement, so dask chunking along lat/lon dimensions should be avoided. Timesteps with labeled regions will be reprojected to a 1km grid and each region within the timestep to measure properties of the major and minor axes of the region's shape. Regions not meeting shape criteria will be added to a "drop" dictionary using the timestep as a key.
+    """Modify the labeled regions DataArray in place by removing regions not meeting AR shape criteria.
+    Function requires the entire spatial domain for shape measurement, so dask chunking along lat/lon dimensions should be avoided.
+    Regions not meeting shape criteria will be added to a "drop" dictionary using the timestep as a key.
 
     Parameters
     ----------
     regions : xarray.DataArray
-        labeled regions of contiguous IVT quantile and floor exceedance
+        labeled regions of contiguous IVT quantile and floor exceedance with time, lat, and lon coordinates
     min_axis_length : int
         units in km
 
     Returns
     -------
-    _type_
-        _description_
+    drop_dict
+        dict of regions failing to meet AR shape criteria where keys are timesteps
+        and values are the labeled regions of the time slice that fail to meet the criteria.
+        the output dictionary is just a reference for confirming that the non-AR labels are dropped.
     """
-    # establish CRS as WGS84
-    regions.rio.write_crs("epsg:4326", inplace=True)
-    
+
+    spatial_resolution_reprojected_km = spatial_resolution_reprojected / 1000
+    min_axis_length_pixels = min_axis_length / spatial_resolution_reprojected_km
+
     drop_dict = {}
     
     for labeled_time_slice in regions:
         
-        # arrays with no regions should only have one unique value (0)
-        if len(np.unique(labeled_time_slice.values)) > 1:
+        props = regionprops(labeled_time_slice.astype(int).values)
+
+        drop_list = []
+        for p in props:
+            # check axis length criteria
+            if p.major_axis_length < min_axis_length_pixels:
+                drop_list.append(p.label)
+            # check length to width ratio 2:1 or greater criteria  
+            elif (p.major_axis_length / p.minor_axis_length) < 2:
+                drop_list.append(p.label)
         
-            #reproject to epsg:3338 with 1000m (1km) grid cells
-            # no data is 0 since this is a categorical raster where all non-zero values are region labels
-            a_3338 = a.rio.reproject('epsg:3338', resolution=1000, nodata=0, resampling=rasterio.enums.Resampling.nearest)
-
-            props = regionprops(a_3338.astype(int).values)
-
-            drop_list = []
-
-            for p in props:
-                #check axis length
-                if p.major_axis_length < min_axis_length:
-                    drop_list.append(p.label)
-                #check length to width ratio 2:1 or greater    
-                #elif (p.major_axis_length / p.minor_axis_length) < 2:
-                    #drop_list.append(p.label)
-            
-            if len(drop_list) > 0:
-                drop_dict[a_3338.time.values] = drop_list
+        if len(drop_list) > 0:
+            drop_dict[labeled_time_slice.time.values] = drop_list
+    
     # use the drop dictionary to do another loop thru the original dataset and reassign dropped labels to 0
-    for d in drop_dict: 
-        regions.loc[dict(time=d)]  = xr.where(regions.sel(time=d).isin(drop_dict[d]), 0, regions.sel(time=d))
+    for d in drop_dict:
+        regions.loc[dict(time=d)] = xr.where(regions.sel(time=d).isin(drop_dict[d]), 0, regions.sel(time=d))
          
     return drop_dict
 
 
+def is_directionally_coherent(ivt_direction_values,
+                              range_degrees=ar_params["direction_deviation_threshold"]):
+    """
+    Determine IVT directional coherence. If more than half of the grid cells have IVT directions deviating
+    greater than the threshold from the object's mean IVT, then then the object is not directionally coherent.
+
+    Parameters:
+        ivt_direction_values (np.ndarray): The IVT direction values to check.
+        range_deg (int): The range in degrees.
+
+    Returns:
+        int: 0 or 1 expression of IVT directional coherence
+    """
+    mean_reference_deg = circmean(ivt_direction_values, high=360, low=0)
+    
+    degrees_deviation = abs((ivt_direction_values - mean_reference_deg + 180) % 360 - 180)
+    pixel_count_in_range = (degrees_deviation <= range_degrees).sum()
+    total_pixels = ivt_direction_values.size
+    pct_in_range = round((pixel_count_in_range / total_pixels) * 100)
+    is_coherent = pct_in_range >= 50
+    # CP: keep below block for logging later on
+    # if not is_coherent and pct_in_range > 0:
+    #     print(f"{pct_in_range}% of pixels are within {range_degrees} of the mean IVT direction of {round(mean_reference_deg)}")
+    return is_coherent * 1
 
 
+def filter_regions_by_ivt_direction_coherence(regions, ivt_direction):
+    """Filter by IVT directional coherence, e.g., objects with 50% of grid cells having deviation > 45° from the object's mean IVT will discarded."
+    ## Note, while we are "in" the direction data we can probably hit this criteria too:
+    Consistency Between Object Mean IVT Direction and Overall Orientation...
+    """
 
+    # prescribe CRS
+    ivt_direction.rio.write_crs("epsg:4326", inplace=True)
+    # reproject to 3338 with prescribed grid cell size to match xy dimensions of labeled data
+    ivt_direction_3338 = ivt_direction.rio.reproject("epsg:3338", resolution=spatial_resolution_reprojected, resampling=rasterio.enums.Resampling.nearest)
+    
+    drop_dict = {}
 
-# filtering by AR direction  --- **** INCOMPLETE!!! ****
-# this function will alter the labeled regions data array in place, removing labels that dont meet shape criteria
+    for region_arr, dir_arr in zip(regions, ivt_direction_3338):
+        
+        # get unique labels for each time stamp
+        timestamp_region_labels = list(np.unique(region_arr.values))
+        
+        # check labeled region presence to avoid work on empty arrays
+        # arrays with no regions should only have one unique value (0)
+        if len(timestamp_region_labels) > 1:
 
-# there are 3 components to this function, following the rules of G&W 2015 (https://agupubs.onlinelibrary.wiley.com/doi/full/10.1002/2015JD024257)
+            incoherent_labels_to_drop = []
+            # use `labeled_comprehension` to get IVT directional coherence for each labeled region
+            # index arg determines which labels will be used
+            # this will determine whether to drop (0) or keep (1) each label for the time step
+            coherence_results = labeled_comprehension(dir_arr, region_arr, index=timestamp_region_labels,
+                                                     func=is_directionally_coherent, out_dtype=int, default=0)
+            
+            # first label is zero in this implementation, which we can skip
+            incoherent_indices = [ix for ix, value in enumerate(coherence_results[1:]) if value == 0]    
+            if len(incoherent_indices) > 0:
+                # use the indices of where the coherence failure occurs to get which labels to drop
+                for ix in incoherent_indices:
+                    incoherent_labels_to_drop.append(timestamp_region_labels[1:][ix])
+                drop_dict[region_arr.time.values] = incoherent_labels_to_drop
+                
+    # use the drop dictionary to loop through the original dataset and reassign dropped labels to 0
+    for d in drop_dict:
+        regions.loc[dict(time=d)] = xr.where(regions.sel(time=d).isin(drop_dict[d]), 0, regions.sel(time=d))
+    return drop_dict
+
+### pseudocode + notes, content below here not refactored
+
+# there are 3 components to this following the rules of G&W 2015 (https://agupubs.onlinelibrary.wiley.com/doi/full/10.1002/2015JD024257)
 
 # 1. "Coherence in IVT Direction. If more than half of the grid cells have IVT deviating more than 45° from the object's mean IVT, the object is discarded."
-# STEPS: 
-#  - list the ivt_dir array values from labeled comprehension
-#  - count values that differ more than 45deg from mean ivt direction just computed
-#  - if >50% values meet that criteria, return a simple "drop" or "keep" string
-# NOTE: this labeled comprehension returns an array with one element for each label: you cannot return lists of variable length...
-# that always results in a "ValueError: setting an array element with a sequence" failure
-# this is why the function currently prints a list, but cannot return that list...
-# instead we see array of [nan nan] below the printed list output)
-#  - use the timesteps, labels, and drop/keep outputs to populate the drop_dict
-
 # 2. "Object Mean Meridional IVT. ... an object is discarded if the mean IVT does not have an appreciable poleward component (>50 kg m−1 s−1)."
 # this poleward component is the p72.162 variable in the ERA5 dataset, equivalent to northward "v" component of IVT
 # using labeled comprehension, the code would look something like this:
 # for r, p in zip(regions, ivt_poleward):
 #     lbls = list(np.unique(r.values))
 #     mean_poleward = labeled_comprehension(p, r, lbls, np.mean, float, 0)
-
 # 3. "Consistency Between Object Mean IVT Direction and Overall Orientation...An object is discarded if the direction of mean IVT deviates from the overall orientation by more than 45°." G&W use the azimuth of the line drawn at maximum great circle distance of the labeled region. I think we would find the two cells within the labeled region that are at maximum distance from each other, find the line between them, and get its azimuth to compare to the mean direction calculated in step 1. NOTE that the degree directions used in step 1 represent direction the AR is coming FROM....so the azimuth here would also need to point in the FROM direction, not the TO direction....
-
-
-#  LAST STEP:
-# - use drop_dict similar to filter_regions_by_geometry() function to remove region labels in place
-
-
-
-    
-def filter_regions_by_direction(regions, ivt_dir):
-    
-    drop_dict={}
-    
-    
-    # 1. Coherence in IVT Direction
-    
-    # custom function, needs work! currently just prints a list
-    def count_wind_dir(vals):
-        l=[]
-        for v in vals:
-            l.append(v)
-        print(l)
-    
-    
-    for r, d in zip(regions, ivt_dir):
-        
-        # check if there are actually any labeled regions, to avoid math on empty arrays
-        # arrays with no regions should only have one unique value (0)
-        if len(np.unique(r.values)) > 1:
-            
-            # get unique labels
-            lbls = list(np.unique(r.values))
-            print("Labeled regions at " + str(r.time.values) + ": " + str(lbls))
-            
-            # use label comprehension to get mean ivt_dir for each labeled region
-            mean_dirs = labeled_comprehension(d, r, lbls, np.mean, float, 0)
-            print("Mean IVT directions at " + str(r.time.values) + ": " + str(mean_dirs))
-            
-            # apply custom function to compare ivt_dir values in labeled areas to means
-            drop_keep = labeled_comprehension(d, r, lbls, count_wind_dir, float, 0)
-            print(drop_keep)
-            
-            # populate the drop_dict
-            #for d in drop_dict: 
-                #regions.loc[dict(time=d)] = xr.where(regions.sel(time=d).isin(drop_dict[d]), 0, regions.sel(time=d))
-    
-    # 2. Object Mean Meridional IVT
-    # 3. Consistency Between Object Mean IVT Direction and Overall Orientation
-    
-    
-    
-    #remove regions in place if they are in the drop dict
-    #for d in drop_dict: 
-        #regions.loc[dict(time=d)]  = xr.where(regions.sel(time=d).isin(drop_dict[d]), 0, regions.sel(time=d))
-         
-    
-    
-    return drop_dict
-
-
-
 
 #compute_ar_stats("AR", IVT_data_cube, "direction", "shape")
 #compute general stats for all cells within final AR objects (eg min/mean/max IVT, direction, etc)
 #compute basic non-stat values for final AR objects (eg length, width, area, date/time, unique AR id?)
 #return long format "stats_df" dataframe with columns (AR / stat / value)
-
-
 #ar_to_gdf("AR", "stats_df")
 #convert all ARs to polygon geodataframe
 #join AR stats as attributes
