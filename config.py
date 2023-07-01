@@ -34,6 +34,10 @@ start_year = 2019
 end_year = 2022
 bbox = [30, -170, 65, -135]
 
+# reprojected grid size in meters; used to determine axis length criteria. Axis length measurement algorithm uses pixel, not geographic, distance. If the axis length measurement was 1000 pixels, and the grid size in meters is 1000 (1 km), then the axis length would be 1000 km (1:1). For a grid size of 10000 m (10 km), a 1000 km AR axis is only 100 pixels long (10:1). Smaller grid sizes require more processing time and memory.
+spatial_resolution_reprojected = 10000
+
+# download options
 era5_kwargs = {
     "variable": varnames,
     "product_type": "reanalysis",
