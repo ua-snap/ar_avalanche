@@ -207,8 +207,8 @@ def compute_full_ivt_datacube(era5_fp, ar_params, ard_fp):
 
         dsc["ivt_quantile"] = add_time_coordinate_to_ivt_quantile(dsc)
         
-        # the raw east / north components are not needed in the output
-        dsc = dsc.drop_vars(["p71.162", "p72.162"])
+        # the raw east component is not needed for AR detection, but north is
+        dsc = dsc.drop_vars(["p71.162"])
         # DOY dimension also no longer needed after time coordinate mapping
         dsc = dsc.drop_dims("doy")
         # write to disk
