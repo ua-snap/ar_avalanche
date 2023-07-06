@@ -184,17 +184,15 @@ def filter_regions_by_ivt_direction_coherence(regions, ivt_direction):
     return drop_dict
 
 ### pseudocode + notes, content below here not refactored
+# 3 components following G&W 2015 (https://agupubs.onlinelibrary.wiley.com/doi/full/10.1002/2015JD024257)
+# 1. "Coherence in IVT Direction.
+# 2. "Object Mean Meridional IVT
 
-# there are 3 components to this following the rules of G&W 2015 (https://agupubs.onlinelibrary.wiley.com/doi/full/10.1002/2015JD024257)
-
-# 1. "Coherence in IVT Direction. If more than half of the grid cells have IVT deviating more than 45° from the object's mean IVT, the object is discarded."
-# 2. "Object Mean Meridional IVT. ... an object is discarded if the mean IVT does not have an appreciable poleward component (>50 kg m−1 s−1)."
-# this poleward component is the p72.162 variable in the ERA5 dataset, equivalent to northward "v" component of IVT
-# using labeled comprehension, the code would look something like this:
-# for r, p in zip(regions, ivt_poleward):
-#     lbls = list(np.unique(r.values))
-#     mean_poleward = labeled_comprehension(p, r, lbls, np.mean, float, 0)
-# 3. "Consistency Between Object Mean IVT Direction and Overall Orientation...An object is discarded if the direction of mean IVT deviates from the overall orientation by more than 45°." G&W use the azimuth of the line drawn at maximum great circle distance of the labeled region. I think we would find the two cells within the labeled region that are at maximum distance from each other, find the line between them, and get its azimuth to compare to the mean direction calculated in step 1. NOTE that the degree directions used in step 1 represent direction the AR is coming FROM....so the azimuth here would also need to point in the FROM direction, not the TO direction....
+# 3. Consistency Between Object Mean IVT Direction and Overall Orientation.
+#    Discarded if the direction of mean IVT deviates from the overall orientation by more than 45°." G&W use the azimuth of the line drawn at maximum great circle distance of the labeled region. I think we would find the two cells within the labeled region that are at maximum distance from each other, find the line between them, and get its azimuth to compare to the mean direction calculated in step 1. NOTE that the degree directions used in step 1 represent direction the AR is coming FROM....so the azimuth here would also need to point in the FROM direction, not the TO direction....
+    # we should be able to use regionprops `orientation` here.
+    # create  a test case though to make sure circular coordinates are handled adn to verify to/from directionality.
+    
 
 #compute_ar_stats("AR", IVT_data_cube, "direction", "shape")
 #compute general stats for all cells within final AR objects (eg min/mean/max IVT, direction, etc)
