@@ -36,7 +36,7 @@ def label_contiguous_mask_regions(ivt_mask):
     Parameters
     ----------
     ivt_mask : xarray.DataArray
-        IVT magnitude where the valuyes exceed the quantile and IVT floor.
+        IVT magnitude where the values exceed the IVT quantile and IVT floor.
 
     Returns
     -------
@@ -57,14 +57,16 @@ def label_contiguous_mask_regions(ivt_mask):
         labeled_array, num_features = label(ivt_mask[a].values, structure=s)
         # map labeled regions to the timestep in the template array
         da[a] = labeled_array
-
-    # prescribe CRS
-    da.rio.write_crs("epsg:4326", inplace=True)
-    # reproject to 3338 with prescribed grid cell size, set NoData values to 0
-    da_3338 = da.rio.reproject("epsg:3338", resolution=spatial_resolution_reprojected,
-                               nodata=0, resampling=rasterio.enums.Resampling.nearest)
-    # return a categorical raster where all non-zero values are region labels
-    return da_3338
+    return da
+    # CP note, not sure we need to reproject here
+    # We have lat lon coordinates, so maybe we can compute some great - circle distances instead
+    # # prescribe CRS
+    # da.rio.write_crs("epsg:4326", inplace=True)
+    # # reproject to 3338 with prescribed grid cell size, set NoData values to 0
+    # da_3338 = da.rio.reproject("epsg:3338", resolution=spatial_resolution_reprojected,
+    #                            nodata=0, resampling=rasterio.enums.Resampling.nearest)
+    # # return a categorical raster where all non-zero values are region labels
+    # return da_3338
 
 
 def filter_regions_by_geometry(regions, min_axis_length):
@@ -75,7 +77,7 @@ def filter_regions_by_geometry(regions, min_axis_length):
     Parameters
     ----------
     regions : xarray.DataArray
-        labeled regions of contiguous IVT quantile and floor exceedance with time, lat, and lon coordinates
+        labeled regions of contiguous IVT quantile and floor exceedance with time, lat and lon coordinates
     min_axis_length : int
         units in km
 
@@ -183,10 +185,71 @@ def filter_regions_by_ivt_direction_coherence(regions, ivt_direction):
         regions.loc[dict(time=d)] = xr.where(regions.sel(time=d).isin(drop_dict[d]), 0, regions.sel(time=d))
     return drop_dict
 
+
+def is_poleward_strong(ivt_northward_values,
+                       strength_criterion=ar_params["mean_meridional"]):
+    """
+    Determine strength of IVT poleward component. If the object's mean northward IVT component is less than the criterion, then the object lacks a strong poleward component and should be rejected from the AR classification.
+
+    Parameters:
+        ivt_northward_values (np.ndarray): The IVT northward component values of a labeled region.
+        strength_criterion (int): strength of northward component that an AR candidate must exceed
+
+    Returns:
+        int: 0 or 1 expression of IVT poleward strength
+    """
+    
+    mean_northward_strength = np.mean(ivt_northward_values)
+    is_strong = mean_northward_strength > strength_criterion
+    return is_strong * 1
+
+
+def filter_regions_by_ivt_poleward_strength(regions, ivt_northward_component):
+    """Filter by IVT poleward component. Object is discarded if the mean IVT does not have an appreciable poleward component. The default mean criterion threshold is 50. The poleward component is the ERA5 `72.162` variable.
+    """
+
+    # prescribe CRS
+    # CP note: may not even need to project though, not measuring distance here
+    ivt_northward_component.rio.write_crs("epsg:4326", inplace=True)
+    # reproject to 3338 with prescribed grid cell size to match xy dims of labeled data
+    ivt_northward_component_3338 = ivt_northward_component.rio.reproject("epsg:3338", resolution=spatial_resolution_reprojected, resampling=rasterio.enums.Resampling.nearest)
+    
+    drop_dict = {}
+
+    for region_arr, northward_arr in zip(regions, ivt_northward_component_3338):
+        
+        # get unique labels for each time stamp
+        timestamp_region_labels = list(np.unique(region_arr.values))
+        
+        # check labeled region presence to avoid work on empty arrays
+        # arrays with no regions should only have one unique value (0)
+        if len(timestamp_region_labels) > 1:
+
+            weak_poleward_labels_to_drop = []
+            # use `labeled_comprehension` to get IVT north component for each labeled region
+            # index arg determines which labels will be used
+            # this will determine whether to drop (0) or keep (1) each label for the time step
+            poleward_results = labeled_comprehension(northward_arr, region_arr, index=timestamp_region_labels,
+                                                     func=is_poleward_strong, out_dtype=int, default=0)
+            
+            # first label is zero in this implementation which we can skip
+            weak_poleward_indices = [ix for ix, value in enumerate(poleward_results[1:]) if value == 0]    
+            if len(weak_poleward_indices) > 0:
+                # use the indices of where poleward component is weak to get which labels to drop
+                for ix in weak_poleward_indices:
+                    weak_poleward_labels_to_drop.append(timestamp_region_labels[1:][ix])
+                drop_dict[region_arr.time.values] = weak_poleward_labels_to_drop
+                
+    # use the drop dictionary to loop through the original dataset and reassign dropped labels to 0
+    for d in drop_dict:
+        regions.loc[dict(time=d)] = xr.where(regions.sel(time=d).isin(drop_dict[d]), 0, regions.sel(time=d))
+    return drop_dict
+
+
 ### pseudocode + notes, content below here not refactored
 # 3 components following G&W 2015 (https://agupubs.onlinelibrary.wiley.com/doi/full/10.1002/2015JD024257)
-# 1. "Coherence in IVT Direction.
-# 2. "Object Mean Meridional IVT
+# 1. Coherence in IVT Direction.
+# 2. Object Mean Meridional IVT
 
 # 3. Consistency Between Object Mean IVT Direction and Overall Orientation.
 #    Discarded if the direction of mean IVT deviates from the overall orientation by more than 45°." G&W use the azimuth of the line drawn at maximum great circle distance of the labeled region. I think we would find the two cells within the labeled region that are at maximum distance from each other, find the line between them, and get its azimuth to compare to the mean direction calculated in step 1. NOTE that the degree directions used in step 1 represent direction the AR is coming FROM....so the azimuth here would also need to point in the FROM direction, not the TO direction....
