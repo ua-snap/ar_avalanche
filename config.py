@@ -32,10 +32,7 @@ varnames = ['vertical_integral_of_eastward_water_vapour_flux',
 # use reduced time spans, smaller bboxes for testing
 start_year = 2019
 end_year = 2022
-bbox = [30, -170, 65, -135]
-
-# reprojected grid size in meters; used to determine axis length criteria. Axis length measurement algorithm uses pixel, not geographic, distance. If the axis length measurement was 1000 pixels, and the grid size in meters is 1000 (1 km), then the axis length would be 1000 km (1:1). For a grid size of 10000 m (10 km), a 1000 km AR axis is only 100 pixels long (10:1). Smaller grid sizes require more processing time and memory.
-spatial_resolution_reprojected = 10000
+bbox = [10, -179, 66, -120]
 
 # download options
 era5_kwargs = {
@@ -53,9 +50,9 @@ def api_credentials_check():
     cds_api_prompt = "Climate Data Store API credentials were not found in your $HOME directory. Please verify and store a valid API key in a .cdsapirc file and visit https://cds.climate.copernicus.eu/api-how-to#install-the-cds-api-key for instructions."
     assert ".cdsapirc" in os.listdir(os.environ["HOME"]), cds_api_prompt
 
-# AR detection parameters (identical to Guan & Waliser 2015, see README.md)
+# AR detection parameters, defaults identical to Guan & Waliser 2015
 ar_params = {
-    # days before/after to compute IVT percentile (eg, 60 = 60d before and 60d after for a ~4-month window
+    # days before/after to compute IVT percentile (e.g., 75 before and 75 after for a ~5-month window
     "window": 75,
     # threshold percentile to identify high IVT instances
     "ivt_percentile": 85,
