@@ -1,12 +1,10 @@
 """Integrated Vapor Transport (IVT)
 
-This module computes integrated vapor transport (IVT) magnitude and direction from two ERA5 single-level variables of "vertical integral of eastward water vapour flux" and "vertical integral of northward water vapour flux". A target IVT magnitude percentile (e.g., 85th) value is also computed on a day-of-year (DOY) basis. For each DOY, the target percentile is computed for all grid cells using the IVT magnitude values within some time window (e.g., 5 months) centered on that DOY using data from all years in the period of record to compute the percentiles. The variables of IVT magnitude, IVT direction, and IVT magntiude percentile are composed as an xarray DataSet and written to disk as a netCDF file. The size of the time window and the target percentile are set by config.py.
+This module computes integrated vapor transport (IVT) magnitude and direction from two ERA5 single-level variables of "vertical integral of eastward water vapour flux" and "vertical integral of northward water vapour flux". A target IVT magnitude percentile (e.g., 85th) value is also computed on a day-of-year (DOY) basis. For each DOY, the target percentile is computed for all grid cells using the IVT magnitude values within some time window (e.g., 5 months) centered on that DOY using data from all years in the period of record to compute the percentiles. The variables of IVT magnitude, IVT direction, and IVT magnitude percentile are composed as an xarray DataSet and written to disk as a netCDF file. The size of the time window and the target percentile are set by config.py.
 
 Example Usage:
-    You can use the module from the command line with no arguements, like so:
+    You can use the module from the command line with no arguments, like so:
         $ python compute_ivt.py
-    Or import these functions in a Jupyter Notebook to experiment with other paramter values and/or orchestrate with a Dask client.
-
 """
 import xarray as xr
 import numpy as np
@@ -82,7 +80,7 @@ def compute_period_of_record_quantile(da, day_of_year, window, target_quantile):
     Parameters
     ----------
     da : xarray.DataArray
-        IVT mangtiude
+        IVT magnitude
     day_of_year : int
         DOY to compute target percentile for
     window : int
@@ -121,7 +119,7 @@ def compute_quantiles_for_doy_range(da, doy_start, doy_stop, window, target_quan
     Parameters
     ----------
      da : xarray.DataArray
-        IVT mangtiude
+        IVT magnitude
     doy_start : int
         Start of DOY range (min value is 1)
     doy_stop : int
@@ -179,7 +177,7 @@ def compute_full_ivt_datacube(era5_fp, ar_params, ard_fp):
     Parameters
     ----------
     era5_fp : pathlib.Path
-        Path to downloaded input ERA5 dataa
+        Path to downloaded input ERA5 data
     ar_params : dict
         Guan & Waliser (2015) inspired parameters
     ard_fp : pathlib.Path
@@ -217,7 +215,7 @@ def compute_full_ivt_datacube(era5_fp, ar_params, ard_fp):
 
 if __name__ == "__main__":
     
-    print(f"Using {era5_fp} to compute IVT magntiude, direction, and the {ar_params['ivt_percentile'] / 100} IVT quantile for a time window of {ar_params['window'] * 2} days centered on each day-of-year.")
+    print(f"Using {era5_fp} to compute IVT magnitude, direction, and the {ar_params['ivt_percentile'] / 100} IVT quantile for a time window of {ar_params['window'] * 2} days centered on each day-of-year.")
     
     compute_full_ivt_datacube(era5_fp, ar_params, ard_fp)
     
