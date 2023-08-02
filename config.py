@@ -1,7 +1,7 @@
 """Atmospheric Rivers and Avalanches Configuration
 
-This config file will be imported by other scripts and notebooks in this codebase. Configuration settings include data input/output locations based on user env variables,
-ERA5 download parameters (i.e. variables, time interval, bounding box), and parameters used in vapor transport quantile computations and atmospheric river detection algorithms."""
+This config file is imported by other scripts and notebooks in this codebase. Settings include data input/output locations based on user env variables,
+ERA5 download parameters (variables, time interval, bounding box), and parameters used in vapor transport quantile computations and atmospheric river detection algorithms."""
 
 import os
 from pathlib import Path
@@ -24,10 +24,13 @@ era5_fp = DOWNLOAD_DIR.joinpath("era5_ivt_params.nc")
 # path for IVT computation and AR detection input file
 ard_fp = DOWNLOAD_DIR.joinpath("ar_detection_inputs.nc")
 
+# path for AR detection results shapefile
+shp_fp = OUTPUT_DIR.joinpath("detected_ars.shp")
+
 # ERA5 download parameters
-dataset = 'reanalysis-era5-single-levels'
-varnames = ['vertical_integral_of_eastward_water_vapour_flux',
-           'vertical_integral_of_northward_water_vapour_flux'
+dataset = "reanalysis-era5-single-levels"
+varnames = ["vertical_integral_of_eastward_water_vapour_flux",
+           "vertical_integral_of_northward_water_vapour_flux"
            ]
 # use reduced time spans, smaller bboxes for testing
 start_year = 2019
