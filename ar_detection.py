@@ -13,7 +13,7 @@ from scipy.stats import circmean
 from haversine import haversine
 from shapely.geometry import Polygon
 
-from config import ar_params
+from config import ar_params, ard_fp, shp_fp
 
 
 def compute_intensity_mask(ivt_mag, ivt_quantile, ivt_floor):
@@ -250,7 +250,7 @@ def get_azimuth_of_furthest_points(blob, ds):
 
 def get_poleward_strength(blob):
     """
-    Compute the poleward strength of a labeled region.
+    Computes the poleward strength of a labeled region as the rounded mean intensity (poleward flow) value of the region.
 
     Parameters
     ----------
@@ -260,15 +260,7 @@ def get_poleward_strength(blob):
     Returns
     -------
     tuple
-        A tuple containing the label of the region and the poleward strength.
-
-    Notes
-    -----
-    The function computes the poleward strength of a labeled region as the rounded mean intensity value of the region.
-    The intensity value represents the strength of the poleward flow in the region.
-
-    The output is a tuple containing the label of the region and the computed poleward strength rounded to the nearest
-    integer value.
+        (label of the region, mean poleward strength)
     """
     return blob.label, round(blob.intensity_mean)    
 
@@ -285,8 +277,7 @@ def get_directional_coherence(blob):
     Returns
     -------
     tuple
-        A tuple containing the label of the region, the computed directional coherence percentage, and the mean
-        reference degree.
+        (the label of the region, directional coherence percentage, mean IVT direction)
 
     Notes
     -----
@@ -415,8 +406,7 @@ def filter_ars(ar_di, n_criteria_required=5):
 
     Notes
     -----
-    The function iterates through each time slice in 'ar_di' and checks each labeled region within that time slice. If a region has met the required number of criteria (determined by 'n_criteria_required'), it is added to the 'filtered_ars'
-    dictionary along with the timestamp and region ID.
+    The function iterates through each time slice in 'ar_di' and checks each labeled region within that time slice. If a region has met the required number of criteria (determined by 'n_criteria_required'), it is added to the 'filtered_ars' dictionary along with the timestamp and region ID.
     """
     filtered_ars = {}
     for k in tqdm(ar_di):
@@ -461,7 +451,7 @@ def binary_to_geodataframe(binary_data):
 
 def create_geodataframe_with_all_ars(filtered_ars, ar_di, labeled_blobs):
     """
-    Create a GeoDataFrame containing all ARs (Atmospheric Rivers) meeting the criteria.
+    Create a GeoDataFrame containing all ARs meeting the criteria.
 
     Parameters
     ----------
@@ -479,15 +469,12 @@ def create_geodataframe_with_all_ars(filtered_ars, ar_di, labeled_blobs):
 
     Notes
     -----
-    The attributes of each AR, such as mean IVT, max IVT, min IVT, and time, are added as columns to the GeoDataFrame.
+    Attributes of each AR, such as mean IVT, max IVT, min IVT, and time, are added as columns to the GeoDataFrame.
     """
     single_ar_gdfs = []
     
     for k in tqdm(filtered_ars):
         blob_ix = filtered_ars[k] - 1
-        
-        # unused?
-        #ar_blob = ar_di[k]["blobs with IVT magnitude"][blob_ix]
         
         ar_mask = (labeled_blobs.sel(time=k) == filtered_ars[k])
         ar_mask.rio.write_crs("epsg:4326", inplace=True)
@@ -508,9 +495,9 @@ def create_geodataframe_with_all_ars(filtered_ars, ar_di, labeled_blobs):
     return all_ars
 
 
-def create_shapefile(all_ars):
+def create_shapefile(all_ars, fp):
     """
-    Create a shapefile from the GeoDataFrame containing all ARs meeting the criteria.
+    Save a shapefile to disk from the GeoDataFrame containing all ARs meeting the criteria.
 
     Parameters
     ----------
@@ -520,22 +507,51 @@ def create_shapefile(all_ars):
     Returns
     -------
     None
-
-    Notes
-    -----
-    The function takes a GeoDataFrame 'all_ars' containing polygons representing all ARs that meet the criteria and saves it as a shapefile named 'ar_output.shp' in the current working directory.
     """
-    all_ars.to_file("ar_output.shp")
+    all_ars.to_file(fp)
 
 
-def detect_all_ars():
-    pass
+def detect_all_ars(fp, n_criteria, out_shp):
+    """Run the entire AR detection pipeline and generate shapefile output.
+
+    Parameters
+    ----------
+    fp : str
+        File path to the IVT dataset in NetCDF format.
+    n_criteria : int
+        The number of criteria required to consider a region an AR.
+    out_shp : str
+        File path to save the shapefile output.
+
+    Returns
+    -------
+    None
+    """
+    with xr.open_dataset(fp) as ivt_ds:
+        ivt_ds.rio.write_crs("epsg:4326", inplace=True)
+        ivt_ds["thresholded"] = compute_intensity_mask(ivt_ds["ivt_mag"], ivt_ds["ivt_quantile"], ar_params["ivt_floor"])
+        labeled_regions = label_contiguous_mask_regions(ivt_ds["thresholded"])
+        ar_di = generate_region_properties(labeled_regions, ivt_ds)
+        ar_di = get_data_for_ar_criteria(ar_di, ivt_ds)
+        ar_di = apply_criteria(ar_di)
+        output_ars = filter_ars(ar_di, n_criteria_required=n_criteria)
+        output_ar_gdf = create_geodataframe_with_all_ars(output_ars, ar_di, labeled_regions)
+        create_shapefile(output_ar_gdf, out_shp)
+
 
 if __name__ == "__main__":
-    
-    print(f"Using the IVT file to filter target ARs based on several criteria.")
-    
-    #detect_all_ars(era5_fp, ar_params, ard_fp)
-    
-    #print(f"AR detection complete! AR detection parameters saved to {ard_fp}")
+    import argparse
 
+    parser = argparse.ArgumentParser(description="Detect atmospheric rivers and generate shapefile output.")
+    parser.add_argument("--input_file", type=str, default=ard_fp, help="File path to the IVT dataset in NetCDF format.")
+    parser.add_argument("--n_criteria", type=int, default=5, help="Number criteria required to consider a region an AR.")
+    parser.add_argument("--output_shapefile", type=str, default=shp_fp, help="File path to save the shapefile output.")
+
+    args = parser.parse_args()
+
+    print(f"Using the IVT input {args.input_file} to filter candidate ARs based on {n_criteria} criteria.")
+    
+    detect_all_ars(fp=args.input_file, n_criteria=args.n_criteria, out_shp=args.output_shapefile)
+    
+    print(f"Processing complete, shapefile output written to {args.output_shapefile}.")
+    
