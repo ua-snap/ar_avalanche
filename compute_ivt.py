@@ -1,126 +1,222 @@
-# this computation script is designed to be run from the command line with no arguments. 
+"""Integrated Vapor Transport (IVT)
 
-# it will read parameters from the config.py file (eg input/outputs, ar detection parameters),
-# compute ar detection data cube,
-# save ar detection data cube to output directory as .nc file
+This module computes integrated vapor transport (IVT) magnitude and direction from two ERA5 single-level variables of "vertical integral of eastward water vapour flux" and "vertical integral of northward water vapour flux". A target IVT magnitude percentile (e.g., 85th) value is also computed on a day-of-year (DOY) basis. For each DOY, the target percentile is computed for all grid cells using the IVT magnitude values within some time window (e.g., 5 months) centered on that DOY using data from all years in the period of record to compute the percentiles. The variables of IVT magnitude, IVT direction, and IVT magnitude percentile are composed as an xarray DataSet and written to disk as a netCDF file. The size of the time window and the target percentile are set by config.py.
 
+Example Usage:
+    You can use the module from the command line with no arguments, like so:
+        $ python compute_ivt.py
+"""
 import xarray as xr
 import numpy as np
+from tqdm import tqdm
+
 from config import era5_fp, ar_params, ard_fp
 
 
-# function to compute IVT magnitude from eastward and northward components
-# output is kg m**2/s**2
-# see here for math reference: https://www.eol.ucar.edu/content/wind-direction-quick-reference
-def magnitude(a, b):
-    func = lambda x, y: np.sqrt(x**2 + y**2)
-    return xr.apply_ufunc(func, a, b, dask='parallelized')
+def compute_magnitude(u, v):
+    """Compute vapor transport magnitude from eastward (u) and northward (v) components.These may be considered two legs of a right triangle. This magnitude computation is similar to how wind speed is computed from u and v components.
 
-# function to compute geographic IVT direction from eastward and northward components
-# this is the degrees with respect to true north (0=north,90=east,180=south,270=west) that the wind is coming FROM
-# output is in degrees
-# see here for math reference: https://www.eol.ucar.edu/content/wind-direction-quick-reference
-def direction(a, b):
-    func = lambda x, y: 270 - ((180/np.pi) * np.arctan2(x, y))
-    return xr.apply_ufunc(func, a, b, dask='parallelized')
+    Parameters
+    u : xarray.DataArray
+        ERA5 eastward vapor flux
+    v : xarray.DataArray
+        ERA5 northward vapor flux
 
-# function to compute IVT magnitude percentile on a rolling time window
-# this function takes a long time to run and require lots of memory!
-# takes hours even with ivt_mag as integer and when run chunk by chunk with map_blocks()
-# note that without using map_blocks(), there will definitely be a memory error
-def rolling_pctile(da, window, percentile):
-    r = da.rolling(time=window, center=True)
-    pctile = r.reduce(np.quantile, q=percentile)
-    return pctile
+    Returns
+    -------
+    xarray.DataArray
+        Total magnitude of vapor transport
+    """
+    return xr.apply_ufunc(np.hypot, u, v, dask='parallelized')
 
 
-# function to compute IVT magnitude percentile over DOY window subset of the entire time domain 
-# (ie, percentile of window over 'normal' period)
-# this function takes a long time to run and require lots of memory!
-# takes hours even with ivt_mag as integer and when run chunk by chunk with map_blocks()
-# note that without using map_blocks(), there will definitely be a memory error
-def normal_pctile(da, window, percentile):
+def compute_direction(u, v):
+    """Compute vapor transport direction from eastward (u) and northward (v) components. reference: https://www.eol.ucar.edu/content/wind-direction-quick-reference
+
+    Parameters
+    u : xarray.DataArray
+        ERA5 eastward vapor flux
+    v : xarray.DataArray
+        ERA5 northward vapor flux
+
+    Returns
+    -------
+    xarray.DataArray
+        Direction the vapor transport is coming from in degrees with respect to true north (0=north, 90=east, 180=south, 270=west)
+    """
+    func = lambda x, y: 270 - ((180 / np.pi) * np.arctan2(x, y))
+    return xr.apply_ufunc(func, u, v, dask='parallelized')
+
+
+def generate_start_end_doys(day_of_year, window):
+    """Generate start and end DOYs for a time window centered on a particular DOY.
+
+    Parameters
+    ----------
+    day_of_year : (int)
+        DOY for which to center the time window
+    window : (int)
+        Time window length in days
+
+    Returns
+    -------
+    tuple
+        Two-tuple of integer DOYs representing the start and end of the time window 
+    """
+    half_window = window // 2
+    # check leap year
+    is_leap_year = (day_of_year == 366)
+    total_days = 366 if is_leap_year else 365
     
-    # create dictionary with all DOYs (1-366, to include leap years) as key and list of DOYs in window as values
-    # there will be one fewer day in the window on a leap year, should not really matter much
-    doy_dict = {}
-    for i in range(1, 367):
-        window_doys = [*range((i - window),(i + window))]
-        doys_to_drop = []
-        for w in window_doys:
-            if w<1:
-                window_doys.append(365+w)
-                doys_to_drop.append(w)
-            elif w>365:
-                window_doys.append(w-365)
-                doys_to_drop.append(w)
-            else:
-                pass   
-        doy_dict[i] = [k for k in window_doys if k not in doys_to_drop]
+    start_day_of_year = (day_of_year - half_window) % total_days
+    end_day_of_year = (day_of_year + half_window) % total_days
     
-    # add day of year (doy) as coordinate label for time dimension in the input ivt_mag data array
-    # !! moved to main compute_ivt() function !!
-    # da = da.assign_coords(doy=da.time.dt.dayofyear)
-    
-    # copy ivt_mag data array to new da_ variable, and also:
-    # rename the variable
-    # assign all values as NA
-    # this is now a template data array with same size/dimensions as the input to store percentile results
-    
-    da_ = da.copy(deep=False).rename('ivt_pctile_n').where(da.values == -9999)
-    
-    # loop thru input ivt_mag data array over time dimension, subsetting by doy window list
-    # compute the ivt_mag percentile over the entire time dimension of the subset
-    # assign the new ivt mag percentile array values to the proper timestep in the empty template array
-
-    for a in range(len(da.time)):
-        sub_da = da.where(da.doy.isin(doy_dict[int(da[a].doy)])) 
-        pa = sub_da.quantile(percentile, dim='time', skipna=True)
-        da_[a] = pa
- 
-    return da_
+    return start_day_of_year, end_day_of_year
 
 
-# function to open era5 dataset and compute IVT magnitude, IVT direction, and rolling window IVT magnitude percentile
-# saves to new .nc file to use as input for AR detection notebook
-def compute_ivt(era5_fp, ar_params, ard_fp):
+def compute_period_of_record_quantile(da, day_of_year, window, target_quantile):
+    """Compute a single quantile value for IVT magnitude for all grid cells for specific DOY periods.
+
+    Parameters
+    ----------
+    da : xarray.DataArray
+        IVT magnitude
+    day_of_year : int
+        DOY to compute target percentile for
+    window : int
+        Time window length in days
+    target_quantile : float
+        Quantile (between 0 and 1) to compute. For some vector V, the q-th quantile of V is the value q of the way from the minimum to the maximum in a sorted copy of V. Note that in the NumPy implementation, the `quantile` and `percentile` functions are equivalent: a quantile value of 0.85 is equivalent to the 85th percentile.
+
+    Returns
+    -------
+    result
+        xarray.DataArray containing the q-th quantile of IVT magnitude for the given DOY.
+    """
+    leap_year = (day_of_year == 366)
     
+    start_day_of_year, end_day_of_year = generate_start_end_doys(day_of_year, window)
+    
+    if day_of_year >= window // 2 and 365 - day_of_year >= window // 2:
+        # subset without wrapping the year boundary (e.g., DOY is 180)
+        subset = da.sel(time=((da.doy >= start_day_of_year) & (da.doy <= end_day_of_year)))
+    else:
+        # subset with wrapping the year boundary (e.g., DOY is 360, window is 30 days)
+        subset = da.sel(time=((da.doy >= start_day_of_year) | (da.doy <= end_day_of_year)))
+
+    # for DOYs other than 366, omit values from DOY 366 from the results
+    if not leap_year:
+        mask = subset['doy'] != 366
+        subset = subset.where(mask, drop=True)
+
+    result = subset.reduce(np.nanquantile, q=target_quantile, dim="time")
+    return result
+
+
+def compute_quantiles_for_doy_range(da, doy_start, doy_stop, window, target_quantile):
+    """Compute quantiles for a range of target DOYs and return them in a DataArray where each slice in time contains an array of target quantile IVT magnitude values for all grid cells.
+
+    Parameters
+    ----------
+     da : xarray.DataArray
+        IVT magnitude
+    doy_start : int
+        Start of DOY range (min value is 1)
+    doy_stop : int
+        End of DOY range (max value is 367)
+    window : int
+        Time window length in days used to compute quantile values for each individual DOY
+    target_quantile : float
+        Quantile (between 0 and 1) to compute.
+
+    Returns
+    -------
+    combined_da
+        xarray.DataArray containing the q-th quantiles of IVT magnitude for all DOYs within the given DOY range.
+    """
+    quantile_results = []
+    for day_of_year in tqdm(range(doy_start, doy_stop)):
+        doy_quantile = compute_period_of_record_quantile(da, day_of_year, window, target_quantile)
+        quantile_results.append(doy_quantile)
+
+    for i, quantile_result in enumerate(quantile_results):
+        doy_result = quantile_result.assign_coords(doy=i + 1)
+        quantile_results[i] = doy_result
+
+    # concatenate list of DataArrays along the 'doy' dimension
+    combined_da = xr.concat(quantile_results, dim='doy')
+    return combined_da
+
+
+def add_time_coordinate_to_ivt_quantile(ds):
+    """Add time coordinates to the ivt_quantile DataArray based on day-of-year (`doy`). The resulting DataArray will have a time coordinate that corresponds to the `time` coordinate of the DataSet. This is done so that time slicing will yield both the quantile and the IVT magnitude and direction and to reduce the dimensionality of the output dataset as it allows the dropping of the `doy` dimension.
+
+    Parameters
+    ----------
+    ds : xarray.Dataset
+        Input dataset containing the ivt_quantile DataArray
+
+    Returns
+    -------
+    xarray.DataArray
+        Updated ivt_quantile DataArray with time coordinate added
+    """
+    ivt_quantile_da = ds["ivt_quantile"]
+    # remap ivt_quantile values to the time coordinate based on doy
+    time_coord = ds["time"].dt.dayofyear
+    ivt_quantile_time = ivt_quantile_da.sel(doy=time_coord)
+    ivt_quantile_time = ivt_quantile_time.assign_coords(time=ds["time"])
+
+    return ivt_quantile_time
+
+
+
+def compute_full_ivt_datacube(era5_fp, ar_params, ard_fp):
+    """Open the downloaded ERA5 dataset, compute IVT magnitude, direction, quantile and write results to new .nc file to use as input for AR detection.
+
+    Parameters
+    ----------
+    era5_fp : pathlib.Path
+        Path to downloaded input ERA5 data
+    ar_params : dict
+        Guan & Waliser (2015) inspired parameters
+    ard_fp : pathlib.Path
+        Path to write results to disk
+
+    Returns
+    -------
+    None
+    """
     with xr.open_dataset(era5_fp) as ds:
-        
-        #add DOY coords to input dataset
-        ds = ds.assign_coords(doy=ds.time.dt.dayofyear)
+        # add DOY coords to input dataset
+        dsc = ds.assign_coords(doy=ds.time.dt.dayofyear)
+        # p71.162 / p72.162 codes for eastward "u" / northward "v" components
+        dsc["ivt_mag"] = compute_magnitude(dsc["p71.162"], dsc["p72.162"])
+        dsc["ivt_dir"] = compute_direction(dsc["p71.162"], dsc["p72.162"])
 
+        # CP note: leaving this for potential future optimization
         # chunk to avoid memory error
-        ds = ds.chunk({"latitude": 1, "longitude": 1})
+        # ds = ds.chunk({"latitude": 1, "longitude": 1})
 
-        # p71.162 = code eastward "u" component
-        # p72.162 = code for northward "v" component
-        ds['ivt_mag'] = magnitude(ds['p71.162'], ds['p72.162']).astype(int)
-        ds['ivt_dir'] = direction(ds['p71.162'], ds['p72.162']).astype(int)
+        time_window_days = ar_params["window"] * 2
+        qth_target_quantile = ar_params["ivt_percentile"] / 100
+        
+        dsc["ivt_quantile"] = compute_quantiles_for_doy_range(dsc["ivt_mag"], 1, 367, time_window_days, qth_target_quantile)
 
-        # for seasonal percentile, recall this is 6hr data, so there are 4 timesteps for each day
-        # so the rolling window = number of days * 4 * 2 (forward and backwards)
-        # for normal percentile, use number of days as window... the DOY dictionary function will apply forward and backward
-        w = ar_params['window']*8
-        q = ar_params['ivt_percentile']/100
-        ds['ivt_pctile_s'] = ds['ivt_mag'].map_blocks(rolling_pctile, kwargs={"window": w, "percentile" : q}, template=ds['ivt_mag']).compute()
-        ds['ivt_pctile_n'] = ds['ivt_mag'].map_blocks(normal_pctile, kwargs={"window": ar_params['window'], "percentile" : q}, template=ds['ivt_mag']).compute()
-
-        ds.to_netcdf(ard_fp)
-    
-    return ard_fp
-
-
+        dsc["ivt_quantile"] = add_time_coordinate_to_ivt_quantile(dsc)
+        
+        # the raw east component is not needed for AR detection, but north is
+        dsc = dsc.drop_vars(["p71.162"])
+        # DOY dimension also no longer needed after time coordinate mapping
+        dsc = dsc.drop_dims("doy")
+        # write to disk
+        dsc.to_netcdf(ard_fp)
 
 
 if __name__ == "__main__":
     
-    print("Computing IVT and AR detection inputs from " + str(era5_fp) + " using these parameters: ")
-    print(ar_params)
+    print(f"Using {era5_fp} to compute IVT magnitude, direction, and the {ar_params['ivt_percentile'] / 100} IVT quantile for a time window of {ar_params['window'] * 2} days centered on each day-of-year.")
     
-    fp = compute_ivt(era5_fp, ar_params, ard_fp)
+    compute_full_ivt_datacube(era5_fp, ar_params, ard_fp)
     
-    if Path(fp).exists:
-        print("Computation complete! AR detection parameters saved to: " + str(fp))
-    else:
-        print("Expected output not found, computation may have failed.")
+    print(f"Computation complete! AR detection parameters saved to {ard_fp}")
