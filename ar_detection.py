@@ -11,7 +11,9 @@ from scipy.ndimage import label, generate_binary_structure
 from skimage.measure import regionprops
 from scipy.stats import circmean
 from haversine import haversine
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, shape
+from rasterio.features import shapes
+
 
 from config import ar_params, ard_fp, shp_fp
 
@@ -236,11 +238,17 @@ def get_azimuth_of_furthest_points(blob, ds):
         maxrow = ds.latitude.shape[0] - 1
     if maxcol >= ds.longitude.shape[0]:
         maxcol = ds.longitude.shape[0] - 1
-    
-    lower_lat = ds.latitude[minrow].values
+
+    upper_lat = ds.latitude[minrow].values
     left_lon = ds.longitude[mincol].values
-    upper_lat = ds.latitude[maxrow].values
+    lower_lat = ds.latitude[maxrow].values
     right_lon = ds.longitude[maxcol].values
+    
+    # JP: the lats below were reversed, which caused a backwards bbox and the forward azimuth result to be reversed...keeping original below for reference
+    # lower_lat = ds.latitude[minrow].values
+    # left_lon = ds.longitude[mincol].values
+    # upper_lat = ds.latitude[maxrow].values
+    # right_lon = ds.longitude[maxcol].values
     
     geodesic = pyproj.Geod(ellps="WGS84")
     fwd_azimuth, _back_azimuth, _distance = geodesic.inv(left_lon, lower_lat, right_lon, upper_lat)
@@ -366,7 +374,7 @@ def apply_criteria(ar_di):
     
             for criterion in criteria:
                 ar_di[k]["ar_targets"][blob_label][criterion] = False
-            
+            # Length / width ratio criterion
             if ar_di[k]["ar_targets"][blob_label]["length/width ratio"] > 2:
                 ar_di[k]["ar_targets"][blob_label]["Length/Width Ratio"] = True
             # Axis length criterion
@@ -378,13 +386,12 @@ def apply_criteria(ar_di):
             # Strong poleward component criterion
             if ar_di[k]["ar_targets"][blob_label]["mean poleward strength"] > ar_params["mean_meridional"]:
                 ar_di[k]["ar_targets"][blob_label]["Mean Meridional IVT"] = True
-            
             # Consistency Between Mean IVT Direction and Overall Orientation criterion
             if abs(180 - (180 - ar_di[k]["ar_targets"][blob_label]["mean_of_ivt_dir"] + ar_di[k]["ar_targets"][blob_label]["overall orientation"]) % 360) < ar_params["orientation_deviation_threshold"]:
                 ar_di[k]["ar_targets"][blob_label]["Consistency Between Mean IVT Direction and Overall Orientation"] = True
     
             # how many criteria were met?
-            ar_di[k]["ar_targets"][blob_label]["Criteria Passed"] = list(ar_di[k]["ar_targets"][blob_label].values()).count(True)
+            ar_di[k]["ar_targets"][blob_label]["Criteria Passed"] = list(map(ar_di[k]["ar_targets"][blob_label].get, criteria)).count(True)
     return ar_di
 
 
@@ -402,7 +409,7 @@ def filter_ars(ar_di, n_criteria_required=5):
     Returns
     -------
     dict
-        contains timestamps as keys and region IDs as values for the ARs that meet the specified number of criteria
+        contains timestamps as keys and region IDs as a list of values for the ARs that meet the specified number of criteria
 
     Notes
     -----
@@ -410,46 +417,20 @@ def filter_ars(ar_di, n_criteria_required=5):
     """
     filtered_ars = {}
     for k in tqdm(ar_di):
+
+        passing_blobs_list = []
+
         for blob_label in ar_di[k]["ar_targets"]:
             if ar_di[k]["ar_targets"][blob_label]["Criteria Passed"] >= n_criteria_required:
-                filtered_ars[k] = blob_label
+                passing_blobs_list.append(blob_label)
+        
+        if len(passing_blobs_list) > 0:
+            filtered_ars[k] = passing_blobs_list
+
     return filtered_ars
 
 
-def binary_to_geodataframe(binary_data):
-    """
-    Convert a binary 2D array to a GeoDataFrame with polygons.
-
-    Parameters
-    ----------
-    binary_data : numpy.ndarray
-        Binary 2D array containing values of 0 and 1.
-
-    Returns
-    -------
-    geopandas.GeoDataFrame
-        EPSG:4326 polygons representing True / 1 regions in the binary array.
-
-    Notes
-    -----
-    Each True value in the input corresponds to a polygon in the GeoDataFrame.
-    """
-    shapes = []
-    # will make many 1 cell x 1 cell polygons
-    for i in range(binary_data.shape[0] - 1):  
-        for j in range(binary_data.shape[1] - 1):
-            if binary_data[i, j] == 1:
-                # Define the geometry for each binary value (cell with value 1)
-                lon_min, lat_min = binary_data.longitude[j], binary_data.latitude[i]
-                lon_max, lat_max = binary_data.longitude[j + 1], binary_data.latitude[i + 1]
-                poly = Polygon([(lon_min, lat_min), (lon_min, lat_max), (lon_max, lat_max), (lon_max, lat_min)])
-                shapes.append(poly)
-
-    gdf = gpd.GeoDataFrame({"_value": [1] * len(shapes)}, geometry=shapes, crs=f"EPSG:4326")
-    return gdf
-
-
-def create_geodataframe_with_all_ars(filtered_ars, ar_di, labeled_blobs):
+def create_geodataframe_with_all_ars(filtered_ars, ar_di, labeled_blobs, ivt_ds):
     """
     Create a GeoDataFrame containing all ARs meeting the criteria.
 
@@ -461,37 +442,52 @@ def create_geodataframe_with_all_ars(filtered_ars, ar_di, labeled_blobs):
         Dictionary containing AR criteria information for each timestamp.
     labeled_blobs : xarray.DataArray
         Labeled discrete and contiguous regions of IVT threshold exceedance.
+    ivt_ds : xarray.Dataset
+        The IVT dataset (used to provide affine transform, so must contain a CRS).
 
     Returns
     -------
     geopandas.GeoDataFrame
-        GeoDataFrame containing polygons representing all ARs meeting the criteria.
+        GeoDataFrame containing polygons representing all ARs meeting the criteria. 
 
     Notes
     -----
     Attributes of each AR, such as mean IVT, max IVT, min IVT, and time, are added as columns to the GeoDataFrame.
     """
-    single_ar_gdfs = []
-    
+
+    crs = str(ivt_ds.rio.crs)
+    aff = ivt_ds.sel(time=str(ivt_ds.time[0].values)).rio.transform()
+
+    gdfs = []
+
     for k in tqdm(filtered_ars):
-        blob_ix = filtered_ars[k] - 1
+
+        l = labeled_blobs.sel(time=k)
+                
+        r = shapes(l, mask = l.isin(filtered_ars[k]), connectivity=8, transform=aff)
+        ar_polys = list(r)
+
+        blob_geom = [shape(i[0]) for i in ar_polys]
+        blob_geom = gpd.GeoSeries(blob_geom, crs=crs)
+
+        blob_labels = [i[1] for i in ar_polys]
+        blob_labels = pd.Series(blob_labels)
+
+        blob_props = [ar_di[k]['ar_targets'][i] for i in blob_labels]     
+
+        result = gpd.GeoDataFrame({'time': k, 'blob_label': blob_labels, 'blob_props': blob_props, 'geometry': blob_geom})
         
-        ar_mask = (labeled_blobs.sel(time=k) == filtered_ars[k])
-        ar_mask.rio.write_crs("epsg:4326", inplace=True)
-        gdf = binary_to_geodataframe(ar_mask)
-        # dummy column for dissolving all the 1x1 polygons into a single polygon
-        gdf["_column"] = 0
-        ar_gdf = gdf.dissolve(by="_column")
-        # add some attributes, can add more here, e.g., mean transport direction
-        ar_gdf["mean IVT"] = round(ar_di[k]["blobs with IVT magnitude"][blob_ix].intensity_mean)
-        ar_gdf["max IVT"] = round(ar_di[k]["blobs with IVT magnitude"][blob_ix].intensity_max)
-        ar_gdf["min IVT"] = round(ar_di[k]["blobs with IVT magnitude"][blob_ix].intensity_min)
-        ar_gdf["time"] = k
-        del ar_gdf["_value"]
-    
-        single_ar_gdfs.append(ar_gdf)
-    
-    all_ars = pd.concat(single_ar_gdfs)
+        m = result.blob_props.apply(pd.Series)
+        new_cols = m.columns.values.tolist()
+        result[new_cols] = m
+        result.drop('blob_props', axis=1, inplace=True)
+
+        gdfs.append(result)
+
+    all_ars = pd.concat(gdfs)
+
+    all_ars.reset_index(inplace=True, drop=True)
+
     return all_ars
 
 
@@ -503,6 +499,8 @@ def create_shapefile(all_ars, fp):
     ----------
     all_ars : geopandas.GeoDataFrame
         GeoDataFrame containing polygons representing all ARs meeting the criteria.
+    fp : File path
+        File path of output shapefile
 
     Returns
     -------
