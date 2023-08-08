@@ -18,9 +18,6 @@ DOWNLOAD_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR = DATA_DIR.joinpath("outputs")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
-# path for ERA5 .nc download
-era5_fp = DOWNLOAD_DIR.joinpath("era5_ivt_params.nc")
-
 # path for IVT computation and AR detection input file
 ard_fp = DOWNLOAD_DIR.joinpath("ar_detection_inputs.nc")
 
@@ -32,14 +29,20 @@ dataset = "reanalysis-era5-single-levels"
 varnames = ["vertical_integral_of_eastward_water_vapour_flux",
            "vertical_integral_of_northward_water_vapour_flux"
            ]
+
+# list of paths for ERA5 .nc downloads
+era5_fps = [DOWNLOAD_DIR.joinpath(str(v + ".nc")) for v in varnames]
+
+# path for concatenated ERA5 .nc
+era5_merged = DOWNLOAD_DIR.joinpath("era5_concat.nc")
+
 # use reduced time spans, smaller bboxes for testing
-start_year = 2019
+start_year = 1992
 end_year = 2022
 bbox = [10, -179, 66, -120]
 
 # download options
 era5_kwargs = {
-    "variable": varnames,
     "product_type": "reanalysis",
     "format": "netcdf",
     "year": [str(year) for year in range(start_year, end_year)],

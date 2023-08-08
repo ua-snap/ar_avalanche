@@ -10,7 +10,23 @@ import xarray as xr
 import numpy as np
 from tqdm import tqdm
 
-from config import era5_fp, ar_params, ard_fp
+from config import era5_fps, era5_merged, ar_params, ard_fp
+
+def merge_components(era5_fps, era5_merged)
+    """Merge the eastward (u) and northward (v) vapor flux .nc files by their shared coordinates, and output to a new .nc file.
+
+    Parameters
+    era5_fps : list of file paths
+        Input file paths of ERA5 eastward and northward vapor flux .nc files to be merged
+    era5_merged : file path
+        Output file path for merged ERA5 eastward and northward vapor flux .nc file
+
+    Returns
+    -------
+    None
+    """
+    ds = xr.open_mfdataset(era5_fps, chunks="auto", combine="by_coords")
+    ds.to_netcdf(era5_merged)
 
 
 def compute_magnitude(u, v):
@@ -171,7 +187,7 @@ def add_time_coordinate_to_ivt_quantile(ds):
 
 
 
-def compute_full_ivt_datacube(era5_fp, ar_params, ard_fp):
+def compute_full_ivt_datacube(era5_merged, ar_params, ard_fp):
     """Open the downloaded ERA5 dataset, compute IVT magnitude, direction, quantile and write results to new .nc file to use as input for AR detection.
 
     Parameters
@@ -187,7 +203,7 @@ def compute_full_ivt_datacube(era5_fp, ar_params, ard_fp):
     -------
     None
     """
-    with xr.open_dataset(era5_fp) as ds:
+    with xr.open_dataset(era5_merged) as ds:
         # add DOY coords to input dataset
         dsc = ds.assign_coords(doy=ds.time.dt.dayofyear)
         # p71.162 / p72.162 codes for eastward "u" / northward "v" components
@@ -214,9 +230,10 @@ def compute_full_ivt_datacube(era5_fp, ar_params, ard_fp):
 
 
 if __name__ == "__main__":
-    
-    print(f"Using {era5_fp} to compute IVT magnitude, direction, and the {ar_params['ivt_percentile'] / 100} IVT quantile for a time window of {ar_params['window'] * 2} days centered on each day-of-year.")
-    
-    compute_full_ivt_datacube(era5_fp, ar_params, ard_fp)
-    
+    print("Merging eastward and northward components...")
+    merge_components(era5_fps, era5_merged)
+    print(f"Merge complete! Merged ERA5 data saved to {era5_merged}.")
+
+    print(f"Computing IVT magnitude, direction, and the {ar_params['ivt_percentile'] / 100} IVT quantile for a time window of {ar_params['window'] * 2} days centered on each day-of-year.")
+    compute_full_ivt_datacube(era5_merged, ar_params, ard_fp)
     print(f"Computation complete! AR detection parameters saved to {ard_fp}")
