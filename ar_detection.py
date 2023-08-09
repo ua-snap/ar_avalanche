@@ -509,7 +509,7 @@ def create_shapefile(all_ars, shp_fp, csv_fp):
     None
     """
     old_cols = all_ars.columns.to_list()
-    new_cols = ['time', 'label', 'ratio', 'length', 'orient', 'poleward', 'dir_coher', 'mean_dir', 'crit1', 'crit2', 'crit3', 'crit4', 'crit5', 'crit_cnt']
+    new_cols = ['time', 'label', 'geometry', 'ratio', 'length', 'orient', 'poleward', 'dir_coher', 'mean_dir', 'crit1', 'crit2', 'crit3', 'crit4', 'crit5', 'crit_cnt']
     col_dict = dict(zip(old_cols,new_cols))
     all_ars.rename(columns=col_dict, inplace=True)
 
