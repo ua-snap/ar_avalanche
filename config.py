@@ -24,6 +24,9 @@ ard_fp = DOWNLOAD_DIR.joinpath("ar_detection_inputs.nc")
 # path for AR detection results shapefile
 shp_fp = OUTPUT_DIR.joinpath("detected_ars.shp")
 
+# path for shapefile column name crosswalk csv
+csv_fp = OUTPUT_DIR.joinpath("columns.csv")
+
 # ERA5 download parameters
 dataset = "reanalysis-era5-single-levels"
 varnames = ["vertical_integral_of_eastward_water_vapour_flux",
