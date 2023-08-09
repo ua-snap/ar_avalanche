@@ -34,7 +34,7 @@ varnames = ["vertical_integral_of_eastward_water_vapour_flux",
 era5_fps = [DOWNLOAD_DIR.joinpath(str(v + ".nc")) for v in varnames]
 
 # path for concatenated ERA5 .nc
-era5_merged = DOWNLOAD_DIR.joinpath("era5_concat.nc")
+era5_merged = DOWNLOAD_DIR.joinpath("era5_merged.nc")
 
 # use reduced time spans, smaller bboxes for testing
 start_year = 1992

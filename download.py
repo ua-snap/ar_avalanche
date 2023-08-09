@@ -1,6 +1,5 @@
 # this download script is designed to be run from the command line with no arguments.
 # it will read parameters from the config.py file and download era5 data as .nc files using those parameters.
-# in our testing, we found CDS request time of ~1hr per variable and download time of ~15min per variable when requesting a 30yr period at 6hr timestep
 
 import cdsapi
 from pathlib import Path

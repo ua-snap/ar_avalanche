@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from config import era5_fps, era5_merged, ar_params, ard_fp
 
-def merge_components(era5_fps, era5_merged)
+def merge_components(era5_fps, era5_merged):
     """Merge the eastward (u) and northward (v) vapor flux .nc files by their shared coordinates, and output to a new .nc file.
 
     Parameters
