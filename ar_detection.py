@@ -15,7 +15,7 @@ from shapely.geometry import Polygon, shape
 from rasterio.features import shapes
 
 
-from config import ar_params, ard_fp, shp_fp
+from config import ar_params, ard_fp, shp_fp, csv_fp
 
 
 def compute_intensity_mask(ivt_mag, ivt_quantile, ivt_floor):
@@ -491,25 +491,34 @@ def create_geodataframe_with_all_ars(filtered_ars, ar_di, labeled_blobs, ivt_ds)
     return all_ars
 
 
-def create_shapefile(all_ars, fp):
+def create_shapefile(all_ars, shp_fp, csv_fp):
     """
-    Save a shapefile to disk from the GeoDataFrame containing all ARs meeting the criteria.
+    Save a shapefile to disk from the GeoDataFrame containing all ARs meeting the criteria. Column names are abbreviated to 10 characters or less, and a .csv file is output with full column name descriptions.
 
     Parameters
     ----------
     all_ars : geopandas.GeoDataFrame
         GeoDataFrame containing polygons representing all ARs meeting the criteria.
-    fp : File path
+    shp_fp : File path
         File path of output shapefile
+    csv_fp : File path
+        File path of output csv
 
     Returns
     -------
     None
     """
-    all_ars.to_file(fp)
+    old_cols = all_ars.columns.to_list()
+    new_cols = ['time', 'label', 'geometry', 'ratio', 'length', 'orient', 'poleward', 'dir_coher', 'mean_dir', 'crit1', 'crit2', 'crit3', 'crit4', 'crit5', 'crit_cnt']
+    col_dict = dict(zip(old_cols,new_cols))
+    all_ars.rename(columns=col_dict, inplace=True)
+
+    all_ars.to_file(shp_fp)
+
+    pd.DataFrame.from_dict(data=col_dict, orient='index').to_csv(csv_fp, header=False)
 
 
-def detect_all_ars(fp, n_criteria, out_shp):
+def detect_all_ars(fp, n_criteria, out_shp, out_csv):
     """Run the entire AR detection pipeline and generate shapefile output.
 
     Parameters
@@ -534,7 +543,7 @@ def detect_all_ars(fp, n_criteria, out_shp):
         ar_di = apply_criteria(ar_di)
         output_ars = filter_ars(ar_di, n_criteria_required=n_criteria)
         output_ar_gdf = create_geodataframe_with_all_ars(output_ars, ar_di, labeled_regions)
-        create_shapefile(output_ar_gdf, out_shp)
+        create_shapefile(output_ar_gdf, out_shp, out_csv)
 
 
 if __name__ == "__main__":
