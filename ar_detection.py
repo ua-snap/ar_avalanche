@@ -629,15 +629,16 @@ if __name__ == "__main__":
     parser.add_argument("--n_criteria", type=int, default=5, help="Number criteria required to consider a region an AR.")
     parser.add_argument("--output_ar_shapefile", type=str, default=shp_fp, help="File path to save the full AR shapefile output.")
     parser.add_argument("--output_csv", type=str, default=csv_fp, help="File path to save the CSV output.")
+    parser.add_argument("--ak_shapefile", type=str, default=ak_shp, help="File path of AK shapefile input.")
     parser.add_argument("--output_6hr_shapefile", type=str, default=landfall_6hr_fp, help="File path to save the 6hr landfall AR shapefile output.")
     parser.add_argument("--output_events_shapefile", type=str, default=landfall_events_fp, help="File path to save landfall AR events shapefile output.")
 
 
     args = parser.parse_args()
 
-    print(f"Using the IVT input {args.input_file} to filter candidate ARs based on {n_criteria} criteria.")
+    print(f"Using the IVT input {args.input_file} to filter candidate ARs based on {args.n_criteria} criteria.")
     
-    detect_all_ars(fp=args.input_file, n_criteria=args.n_criteria, out_shp=args.output_ar_shapefile, out_csv=args.output_csv, fp_6hr=args.output_6hr_shapefile, fp_events=args.output_events_shapefile)
+    detect_all_ars(fp=args.input_file, n_criteria=args.n_criteria, out_shp=args.output_ar_shapefile, out_csv=args.output_csv, ak_shp=args.ak_shapefile, fp_6hr=args.output_6hr_shapefile, fp_events=args.output_events_shapefile)
     
     print(f"Processing complete! Full shapefile output written to {args.output_ar_shapefile}, with companion CSV file written to {args.output_csv}. All Alaska landfall ARs shapefile output written to {args.output_6hr_shapefile}. Condensed Alaska landfall ARs shapefile output written to {args.output_events_shapefile}.")
     
