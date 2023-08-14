@@ -1,4 +1,4 @@
-"""This module will threshold the IVT Dataset and identify AR candidates. Each candidate is tested to determine if it meets the various criteria for AR classification."""
+"""This module will threshold the IVT Dataset and identify AR candidates. Each candidate is tested to determine if it meets the various criteria for AR classification. Candidate areas are converted to polygons and exported as a shapefile."""
 import math
 
 import xarray as xr
@@ -6,6 +6,7 @@ import numpy as np
 import pyproj
 import geopandas as gpd
 import pandas as pd
+import shapely
 from tqdm import tqdm
 from scipy.ndimage import label, generate_binary_structure
 from skimage.measure import regionprops
@@ -13,9 +14,10 @@ from scipy.stats import circmean
 from haversine import haversine
 from shapely.geometry import Polygon, shape
 from rasterio.features import shapes
+from datetime import datetime
 
 
-from config import ar_params, ard_fp, shp_fp, csv_fp
+from config import ar_params, ard_fp, shp_fp, csv_fp, ak_shp, landfall_6hr_fp, landfall_events_fp
 
 
 def compute_intensity_mask(ivt_mag, ivt_quantile, ivt_floor):
@@ -499,9 +501,9 @@ def create_shapefile(all_ars, shp_fp, csv_fp):
     ----------
     all_ars : geopandas.GeoDataFrame
         GeoDataFrame containing polygons representing all ARs meeting the criteria.
-    shp_fp : File path
+    shp_fp : Posix path
         File path of output shapefile
-    csv_fp : File path
+    csv_fp : Posix path
         File path of output csv
 
     Returns
@@ -518,17 +520,89 @@ def create_shapefile(all_ars, shp_fp, csv_fp):
     pd.DataFrame.from_dict(data=col_dict, orient='index').to_csv(csv_fp, header=False)
 
 
-def detect_all_ars(fp, n_criteria, out_shp, out_csv):
+def landfall_ars_export(shp_fp, ak_shp, fp_6hr, fp_events):
+    """Filter the raw AR detection shapefile output to include only ARs making landfall in Alaska, and export the result to a new shapefile. Process the landfall ARs to condense adjacent dates into multipolygons, and export the result to a second new shapefile.
+
+    Parameters
+    ----------
+    shp_fp : PosixPath
+        File path to the raw AR detection shapefile input.
+    ak_shp : PosixPath
+        File path to the Alaska coastline shapefile input.
+    fp_6hr : PosixPath
+        File path for the raw 6hr interval landfall AR shapefile output.
+    fp_events : PosixPath
+        File path for the condensed landfall AR events shapefile output.
+
+    Returns
+    -------
+    None
+    """
+
+    # import AK coastline and AR shps to gdfs
+    ars = gpd.read_file(shp_fp)
+    ak = gpd.read_file(ak_shp)
+
+    # reproject AK coastline to match AR CRS, and dissolve into one multipolygon
+    ak_ = ak.to_crs(ars.crs)
+    ak_d = ak_.dissolve()
+
+    # add new datetime column to ars gdf by parsing ISO timestamp
+    # reformat time column string for output (datetime fields not supported in ESRI shp files)
+    ars['dt'] = [datetime.fromisoformat(ars.time.iloc[[d]].values[0][:-16]) for d in range(len(ars))]
+    ars['time'] = ars['dt'].astype(str)
+
+    # perform spatial join, keeping only AR polygons that intersect with the AK polygon
+    ak_ars = ars.sjoin(ak_d, how='inner', predicate='intersects')
+
+    # export raw 6hr geodataframe to shp
+    ak_ars.drop(columns=['dt', 'index_right', 'FEATURE']).to_file(fp_6hr, index=True)
+
+    # label any ARs occuring on adjacent dates with a unique "diff" ID
+    # for each ID, turn first and last timestep into gdf attributes and combine their geometry into one multipolygon feature
+
+    ak_ars['diff'] = ak_ars['dt'].diff().dt.days.gt(1).cumsum()
+
+    dfs=[]
+
+    for d in ak_ars['diff'].unique():
+        sub = ak_ars[ak_ars['diff'] == d]
+        geo = shapely.multipolygons([sub.geometry])
+        df = gpd.GeoDataFrame({
+            'event_id':d,
+            'start':sub['dt'].min(),
+            'end':sub['dt'].max(),
+            'geometry':geo
+            })
+        dfs.append(df)
+
+    events = pd.concat(dfs)
+    events.set_index('event_id', inplace=True)
+    events.crs = ars.crs
+
+    # reset datetime columns as strings for output (datetime fields not supported in ESRI shp files)
+    events['start'] = events['start'].astype(str)
+    events['end'] = events['end'].astype(str)
+
+    # export condensed event AR geodataframe to shp
+    events.to_file(fp_events, index=True)
+
+
+def detect_all_ars(fp, n_criteria, out_shp, out_csv, ak_shp, fp_6hr, fp_events):
     """Run the entire AR detection pipeline and generate shapefile output.
 
     Parameters
     ----------
-    fp : str
+    fp : Posix path
         File path to the IVT dataset in NetCDF format.
     n_criteria : int
         The number of criteria required to consider a region an AR.
-    out_shp : str
+    out_shp : Posix path
         File path to save the shapefile output.
+    out_csv : Posix Path
+        File path to save the csv output.
+    ak_shp : Posix Path
+        File path of Alaska coastline shapefile input.
 
     Returns
     -------
@@ -542,8 +616,9 @@ def detect_all_ars(fp, n_criteria, out_shp, out_csv):
         ar_di = get_data_for_ar_criteria(ar_di, ivt_ds)
         ar_di = apply_criteria(ar_di)
         output_ars = filter_ars(ar_di, n_criteria_required=n_criteria)
-        output_ar_gdf = create_geodataframe_with_all_ars(output_ars, ar_di, labeled_regions)
+        output_ar_gdf = create_geodataframe_with_all_ars(output_ars, ar_di, labeled_regions, ivt_ds)
         create_shapefile(output_ar_gdf, out_shp, out_csv)
+        landfall_ars_export(out_shp, ak_shp, fp_6hr, fp_events)
 
 
 if __name__ == "__main__":
@@ -552,13 +627,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Detect atmospheric rivers and generate shapefile output.")
     parser.add_argument("--input_file", type=str, default=ard_fp, help="File path to the IVT dataset in NetCDF format.")
     parser.add_argument("--n_criteria", type=int, default=5, help="Number criteria required to consider a region an AR.")
-    parser.add_argument("--output_shapefile", type=str, default=shp_fp, help="File path to save the shapefile output.")
+    parser.add_argument("--output_ar_shapefile", type=str, default=shp_fp, help="File path to save the full AR shapefile output.")
+    parser.add_argument("--output_csv", type=str, default=csv_fp, help="File path to save the CSV output.")
+    parser.add_argument("--output_6hr_shapefile", type=str, default=landfall_6hr_fp, help="File path to save the 6hr landfall AR shapefile output.")
+    parser.add_argument("--output_events_shapefile", type=str, default=landfall_events_fp, help="File path to save landfall AR events shapefile output.")
+
 
     args = parser.parse_args()
 
     print(f"Using the IVT input {args.input_file} to filter candidate ARs based on {n_criteria} criteria.")
     
-    detect_all_ars(fp=args.input_file, n_criteria=args.n_criteria, out_shp=args.output_shapefile)
+    detect_all_ars(fp=args.input_file, n_criteria=args.n_criteria, out_shp=args.output_ar_shapefile, out_csv=args.output_csv, fp_6hr=args.output_6hr_shapefile, fp_events=args.output_events_shapefile)
     
-    print(f"Processing complete, shapefile output written to {args.output_shapefile}.")
+    print(f"Processing complete! Full shapefile output written to {args.output_ar_shapefile}, with companion CSV file written to {args.output_csv}. All Alaska landfall ARs shapefile output written to {args.output_6hr_shapefile}. Condensed Alaska landfall ARs shapefile output written to {args.output_events_shapefile}.")
     
