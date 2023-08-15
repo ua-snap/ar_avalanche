@@ -34,7 +34,7 @@ landfall_6hr_fp = OUTPUT_DIR.joinpath("landfall_ars_6hr.shp")
 landfall_events_fp = OUTPUT_DIR.joinpath("landfall_ars_events.shp")
 
 # path to Alaska coastline shapefile (included in Github repo tree)
-ak_shp = Path('./shp/Alaska_Coast_Simplified_Polygon.shp')
+ak_shp = Path("./shp/Alaska_Coast_Simplified_Polygon.shp")
 
 # ERA5 download parameters
 dataset = "reanalysis-era5-single-levels"
