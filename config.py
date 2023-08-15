@@ -25,7 +25,16 @@ ard_fp = DOWNLOAD_DIR.joinpath("ar_detection_inputs.nc")
 shp_fp = OUTPUT_DIR.joinpath("detected_ars.shp")
 
 # path for shapefile column name crosswalk csv
-csv_fp = OUTPUT_DIR.joinpath("columns.csv")
+csv_fp = OUTPUT_DIR.joinpath("detected_ars_columns.csv")
+
+# path for landfall ARs (6hr) results shapefile
+landfall_6hr_fp = OUTPUT_DIR.joinpath("landfall_ars_6hr.shp")
+
+# path for landfall ARs (events) results shapefile
+landfall_events_fp = OUTPUT_DIR.joinpath("landfall_ars_events.shp")
+
+# path to Alaska coastline shapefile (included in Github repo tree)
+ak_shp = Path("./shp/Alaska_Coast_Simplified_Polygon.shp")
 
 # ERA5 download parameters
 dataset = "reanalysis-era5-single-levels"
