@@ -563,7 +563,7 @@ def landfall_ars_export(shp_fp, ak_shp, fp_6hr, fp_events):
 
     ak_ars['diff'] = ak_ars['dt'].diff().dt.days.gt(1).cumsum()
 
-    dfs=[]
+    dfs = []
 
     for d in ak_ars['diff'].unique():
         sub = ak_ars[ak_ars['diff'] == d]
