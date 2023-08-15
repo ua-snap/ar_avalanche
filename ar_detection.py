@@ -12,7 +12,7 @@ from scipy.ndimage import label, generate_binary_structure
 from skimage.measure import regionprops
 from scipy.stats import circmean
 from haversine import haversine
-from shapely.geometry import Polygon, shape
+from shapely.geometry import shape
 from rasterio.features import shapes
 from datetime import datetime
 
