@@ -300,6 +300,39 @@ def get_directional_coherence(blob):
     pct_coherent = round((pixel_count / total_pixels) * 100)
     return blob.label, pct_coherent, mean_reference_deg
 
+def get_total_ivt_strength(blob):
+    """
+    Computes the total strength of a labeled region as the regional sum of IVT.
+
+    Parameters
+    ----------
+    blob : skimage.measure._regionprops.RegionProperties
+        Region properties object representing a labeled region.
+
+    Returns
+    -------
+    tuple
+        (label of the region, total IVT strength)
+    """
+    return blob.label, round(blob.image_intensity.sum())
+
+
+def get_relative_ivt_strength(blob):
+    """
+    Computes the relative strength of a labeled region as the regional sum of IVT divided by region area.
+
+    Parameters
+    ----------
+    blob : skimage.measure._regionprops.RegionProperties
+        Region properties object representing a labeled region.
+
+    Returns
+    -------
+    tuple
+        (label of the region, relative IVT strength)
+    """
+    return blob.label, round(blob.image_intensity.sum()/blob.area)
+
 
 def get_data_for_ar_criteria(ar_di, ds):
     """
@@ -346,6 +379,16 @@ def get_data_for_ar_criteria(ar_di, ds):
             int_label, pct_coherent, mean_of_ivt_dir = get_directional_coherence(blob)
             ar_di[k]["ar_targets"][int_label]["directional_coherence"] = pct_coherent
             ar_di[k]["ar_targets"][int_label]["mean_of_ivt_dir"] = round(mean_of_ivt_dir)
+
+    for k in tqdm(ar_di, desc="Getting total IVT strength for each AR target:"):
+        for blob in ar_di[k]["blobs with IVT magnitude"]:
+            int_label, total_ivt_strength = get_total_ivt_strength(blob)
+            ar_di[k]["ar_targets"][int_label]["total ivt strength"] = total_ivt_strength
+        
+    for k in tqdm(ar_di, desc="Getting relative IVT strength for each AR target:"):
+        for blob in ar_di[k]["blobs with IVT magnitude"]:
+            int_label, relative_ivt_strength = get_relative_ivt_strength(blob)
+            ar_di[k]["ar_targets"][int_label]["relative ivt strength"] = relative_ivt_strength
     
     return ar_di
 
@@ -454,7 +497,7 @@ def create_geodataframe_with_all_ars(filtered_ars, ar_di, labeled_blobs, ivt_ds)
 
     Notes
     -----
-    Attributes of each AR, such as mean IVT, max IVT, min IVT, and time, are added as columns to the GeoDataFrame.
+    Attributes of each AR, such as IVT strength, mean IVT, max IVT, min IVT, and time, are added as columns to the GeoDataFrame.
     """
 
     crs = str(ivt_ds.rio.crs)
@@ -511,7 +554,7 @@ def create_shapefile(all_ars, shp_fp, csv_fp):
     None
     """
     old_cols = all_ars.columns.to_list()
-    new_cols = ['time', 'label', 'geometry', 'ratio', 'length', 'orient', 'poleward', 'dir_coher', 'mean_dir', 'crit1', 'crit2', 'crit3', 'crit4', 'crit5', 'crit_cnt']
+    new_cols = ['time', 'label', 'geometry', 'ratio', 'length', 'orient', 'poleward', 'dir_coher', 'mean_dir', 'tot_str', 'rel_str', 'crit1', 'crit2', 'crit3', 'crit4', 'crit5', 'crit_cnt']
     col_dict = dict(zip(old_cols,new_cols))
     all_ars.rename(columns=col_dict, inplace=True)
 
