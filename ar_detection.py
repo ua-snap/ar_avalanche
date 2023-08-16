@@ -615,6 +615,8 @@ def landfall_ars_export(shp_fp, ak_shp, fp_6hr, fp_events):
             'event_id':d,
             'start':sub['dt'].min(),
             'end':sub['dt'].max(),
+            'sumtot_str':sub['tot_str'].sum(),
+            'sumrel_str':sub['rel_str'].sum(),
             'geometry':geo
             })
         dfs.append(df)
