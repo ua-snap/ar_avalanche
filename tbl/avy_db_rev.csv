@@ -1,0 +1,171 @@
+avy_db
+Avalanche ID (new),Source Type,Avalanche Date,Month,Day,Year,Trigger,Trigger - Detail,Location,Loc
+5,StormData,9-Apr-88,4,9,1988,Natural,Natural,Southeast of Anchorage,Anchorage
+18,StormData,8-Nov-92,11,8,1992,Natural,Natural,Anchorage,Anchorage
+20,ADN,10-Jan-93,1,10,1993,Human,Human,Anchorage (Flatttop),Anchorage
+42,StormData,26-Mar-99,3,26,1999,no data,no data,Anchorage to Grandview aong railroad,Anchorage
+66,ADN,11-Nov-00,11,11,2000,Human,Human (Hiker and dog triggered),Anchorage (Flattop),Anchorage
+93,ADN,31-Dec-02,12,31,2002,Natural,"Natural - snow, perhaps atmospheric river",Flattop Mountain,Anchorage
+109,ADN,8-Feb-06,2,8,2006,Human,human (snowboarder),Flattop Mountain,Anchorage
+133,ADN,29-Jan-11,1,29,2011,no data,no data - unknown,mountains south of anchorage,Anchorage
+16,StormData,16-Dec-91,12,16,1991,Natural,Natural,Anchorage to Seward,Anchorage
+135,NAD,18-Apr-11,4,18,2011,no data,no data,"Bird Ridge, Chugach State Park",Bird Point
+47,StormData,16-Apr-99,4,16,1999,no data,no data,12 miles south of Cantwell,Cantwell
+85,ADN,23-Dec-01,12,23,2001,Human,Human - snowmachiner,"Cantwell (AK Range, SW of Cantwell) - 20w of Marker 185",Cantwell
+86,ADN,24-Dec-01,12,24,2001,no data,no data,"Cantwell, AK",Cantwell
+103,ADN,3-Dec-04,12,3,2004,no data,no data - likely natural,"Cantwell, AK",Cantwell
+156,StormData,14-Mar-15,3,14,2015,Human,Human - AF - Foot penetration,"Cantwell, AK MP 191",Cantwell
+62,StormData,9-Mar-00,3,9,2000,no data,no data,Chignik,Chignik Lagoon
+171,NAD,28-Jan-17,1,28,2017,Human,Human - AM - Snowmobile,"Near Cooper Landing, Kenai Peninsula",Cooper Landing
+46,ADN,15-Apr-99,4,15,1999,no data,no data - likely winter storm,"Cordova, AK",Cordova
+56,StormData,26-Jan-00,1,26,2000,no data,no data - likely heavey snow,"Cordova, AK",Cordova
+82,ADN,12-Dec-01,12,12,2001,Natural,Natural - high winds and new snow,"Cordova, AK",Cordova
+121,ADN,8-Mar-08,3,8,2008,no data,no data - unknown - but during high risk time,"Cordova, AK",Cordova
+141,ADN,17-Apr-12,4,17,2012,no data,no data,"Cordova, AK",Cordova
+89,ADN,28-Mar-02,3,28,2002,Human,human - skieers,Eagle River,Eagle River
+90,ADN,31-Mar-02,3,31,2002,no data,no data,Eagle River,Eagle River
+127,ADN,13-Feb-10,2,13,2010,Human,Human - AS - Skier,Eagle River - Hiland Road,Eagle River
+72,StormData,18-Jan-01,1,18,2001,no data,no data,Old Glenn Highway MP 7.4,Eagle River
+74,StormData,23-Jan-01,1,23,2001,no data,no data,Old Glenn Highway MP 7.4,Eagle River
+13,ADN,3-Jun-90,6,3,1990,no data,no data,Anchorage (Eklutna Lake),Eklutna
+59,ADN,1-Feb-00,2,1,2000,Natural,Natural,Eklutna Lake,Eklutna
+1,ADN,8-Feb-86,2,8,1986,Natural,Natural - Winter Storm,Girdwood (Near),Girdwood
+3,ADN,23-Feb-88,2,23,1988,no data,no data,"Girdwood (Seward Highway, Mile 91)",Girdwood
+4,ADN,24-Feb-88,2,24,1988,Natural,Natural (additional were artilery),Seward Highway to Girdwood ,Girdwood
+6,ADN,12-Apr-88,4,12,1988,Natural,Natural,Girdwood (South of Girdwood on seward highway),Girdwood
+10,ADN,28-Feb-90,2,28,1990,no data,no data - unknown - likely no natural but no info on weather,"Girdwood, Seward Highway",Girdwood
+27,StormData,1/3/1995,1,3,1995,Natural,Natural,Girdwood,Girdwood
+28,ADN,20-Feb-95,2,20,1995,Natural,Natural: Weather - Heavy snowfall,Girdwood,Girdwood
+33,ADN,9-Apr-97,4,9,1997,Human,human (snowboarder),Girdwood,Girdwood
+34,ADN,23-Nov-97,11,23,1997,Human,Human,Chugach Mountains; Girdwood,Girdwood
+37,ADN,2-Feb-98,2,2,1998,no data,no data - likely heavey snow,Girdwood (Btw. Girdood and Bird Valley),Girdwood
+39,ADN,12-Mar-99,3,12,1999,no data,no data,Girdwood (Alyeska Resort),Girdwood
+55,ADN,25-Jan-00,1,25,2000,no data,no data - weather likely,Girdwood (Alyeska Resort),Girdwood
+70,StormData,7-Jan-01,1,7,2001,Natural,Natural - Weather likely related,"Turnagain Arm, MP 98, near girdood",Girdwood
+94,ADN,5-Feb-03,2,5,2003,no data,no data,Girdwood (west of),Girdwood
+949,StormData,6-Feb-03,2,6,2003,no data,no data,between Anchorage and Girdwood,Girdwood
+107,ADN,3-Jan-06,1,3,2006,Human,Human (Skiier),Girdwood,Girdwood
+110,StormData,9-Feb-06,2,9,2006,Natural,Natural - warming event,"Seward Highway. MP 33-84 (84 near Girdwood; 33 near Carter lake, 1/2 between Anch and Seward)",Girdwood
+116,ADN,25-Jan-07,1,25,2007,no data,no data,Girdwood (Alyeska Resort),Girdwood
+131,ADN,19-Feb-10,2,19,2010,Natural,Natural,Girdwood to Moose Pass,Girdwood
+14,ADN,30-Dec-90,12,30,1990,no data,no data,Chugach Monuntains (below Powerine pass),Girdwood
+15,ADN,4-Jan-91,1,4,1991,no data,no data,Chugach Mountains,Girdwood
+23,ADN,12-Mar-94,3,12,1994,no data,no data -likely human triggered,near Chugach State Park,Girdwood
+24,ADN,28-Mar-94,3,28,1994,Human,Human,Chugach State Park (Powderline Pass),Girdwood
+58,StormData,1-Feb-00,2,1,2000,Natural,Natural - Extreme Weather,Turnagain Arm,Girdwood
+73,StormData,19-Jan-01,1,19,2001,no data,no data,MP 105 Seward Highway,Girdwood
+101,ADN,14-Mar-04,3,14,2004,no data,no data - unknown,Turnagain Arm,Girdwood
+145,ADN,3-Jan-14,1,3,2014,Human,Human,Turnagain Arm,Girdwood
+49,StormData,29-Apr-99,4,29,1999,no data,no data,"Glennallen, ""Ultima Thule"" in the Universty Range of southeast Glennallen",Glennallen
+87,StormData,12-Jan-02,1,12,2002,no data,no data,COPPER RIVER BASIN (ZONE),Glennallen
+139,ADN,13-Mar-12,3,13,2012,Human,Human - AR - Snowboarder,Haines,Haines
+144,NAD,3-Mar-13,3,3,2013,no data,no data,"Haines, (Takhinsha Mountains, southwest of Haines)",Haines
+149,NAD,15-Mar-14,3,15,2014,Human,Human - AS - Skier,"Kicking Horse Valley, west of Haines",Haines
+155,ADN,11-Mar-15,3,11,2015,Human,Human,Haines,Haines
+157,ADN,15-Mar-15,3,15,2015,no data,no data,Haines,Haines
+30,StormData,2/3/1996,2,3,1996,Natural,Natural - Extreme Weather,"Haines Borogh, cut off Richardson (from Valdez?)",Haines
+81,StormData,7-Dec-01,12,7,2001,no data,no data,Haines Highway,Haines
+83,StormData,22-Dec-01,12,22,2001,no data,no data,"Haines Highway, MP 19-20",Haines
+19,ADN,22-Nov-92,11,22,1992,no data,no data - likely unusually warm weather,Healy,Healy
+12,ADN,3-Mar-90,3,3,1990,Human,"Human, sledding",Homer,Homer
+84,ADN,23-Dec-01,12,23,2001,no data,no data - Unknown - likely high winds and new snow,"Hope, AK (sout off), south of Anchorage",Hope
+32,ADN,17-Jan-97,1,17,1997,no data,no data,Resurrection Pass,Hope
+48,ADN,27-Apr-99,4,27,1999,Human,human - snowboarder,Juneau,Juneau
+77,ADN,1-Mar-01,3,1,2001,no data,no data - likely weather earlier in the week,Juneau (Eagle Crest Ski Area),Juneau
+88,StormData,14-Feb-02,2,14,2002,no data,no data,Juneau,Juneau
+119,ADN,16-Feb-08,2,16,2008,no data,no data,Juneau (Eagle Crest Ski Area),Juneau
+175,ADN,3-Mar-17,3,3,2017,no data,no data,Juneau,Juneau
+176,ADN,4-Mar-17,3,4,2017,Human,human (snowboarder),Juneau,Juneau
+177,ADN,31-Mar-17,3,31,2017,no data,no data,Juneau,Juneau
+173,ADN,25-Feb-17,2,25,2017,no data,no data,Ketchikan,Ketchikan
+65,StormData,8-Apr-00,4,8,2000,no data,"no data, likely snowmachiner ",NWS Copper Basin Zone,McCarthy
+7,ADN,1-May-88,5,1,1988,Natural,Natural,"Moose Pass (Seward Highway, near Summit lake)",Moose Pass
+112,ADN,11-Feb-06,2,11,2006,Natural,Natural,Seward Highway (South of Moose Pass),Moose Pass
+40,StormData,3/19/1999,3,19,1999,Natural,Natural - Extreme Weather,Mile 37 Seward Highway,Moose Pass
+45,StormData,6-Apr-99,4,6,1999,no data,no data,Mile 29 of the Seward Highway,Moose Pass
+57,ADN,28-Jan-00,1,28,2000,no data,no data - likely wet snow,"Seward Highway, Mile 37",Moose Pass
+138,StormData,2-Feb-12,2,2,2012,no data,no data - likely weather,Seward Hwy and jnt of Sterlin Highway,Moose Pass
+166,NAD,27-Feb-16,2,27,2016,no data,no data,Nelchina Glacier area,Nelchina
+38,StormData,3-Mar-99,3,3,1999,no data,no data,a remote valley in the Chugach Mountains south of Eureka Lodge,Nelchina
+69,ADN,3-Jan-01,1,3,2001,Human,human (snowmachiners),Eureka,Nelchina
+75,StormData,3-Feb-01,2,3,2001,Human,Human - Snowmachiners,"South slope Eureka, near east fork of Matanuska River",Nelchina
+60,ADN,2-Feb-00,2,2,2000,Natural,Natural - ikely weather,Matanuska-Susitna (mile 7.5),Palmer
+63,ADN,8-Apr-00,4,8,2000,no data,"no data, likely snowmachiner caused","Paxon, AK",Paxson
+71,ADN,13-Jan-01,1,13,2001,Human,Human,"Paxon, AK",Paxson
+102,ADN,10-Apr-04,4,10,2004,Human,Human (Skiier),"Paxon, AK",Paxson
+168,StormData,3-Apr-16,4,3,2016,Human,Human - snowmachiner,Paxon,Paxson
+169,StormData,11-Apr-16,4,11,2016,no data,No Data - human likely,Paxon,Paxson
+78,StormData,18-Mar-01,3,18,2001,no data,no data,MP 198 Richardson Highway,Paxson
+151,ADN,6-Dec-14,12,6,2014,Human,Human - AS - Skier,Rainbow Mnts (MP 205 Richardson),Paxson
+167,ADN,27-Mar-16,3,27,2016,Human,Human - climber,Canwell Glacier (south of Delta Junction),Paxson
+2,ADN,13-May-87,5,13,1987,no data,no data,Denali N.P. (Mt. Foraker),Petersville
+17,ADN,18-Jun-92,6,18,1992,no data,no data,Denali N.P. (Mt. Foraker),Petersville
+25,ADN,7-May-94,5,7,1994,no data,no data,"Denali N.P. (Mount Hunter, Alaska Range, near Denali)",Petersville
+31,ADN,13-May-96,5,13,1996,no data,no data - unknown,"Denali N.P. (Mount Hunter, Alaska Range, near Denali)",Petersville
+104,StormData,23-Dec-04,12,23,2004,Natural,Natural - winter strom,Denali National Park,Petersville
+105,ADN,16-Feb-05,2,16,2005,no data,no data,Mt. Huntington (AK Range),Petersville
+136,NAD,28-Apr-11,4,28,2011,Natural,Natural,Ruth Gorge,Petersville
+137,ADN,25-May-11,5,21,2011,no data,no data,"Denali N.P, Mt. Francis",Petersville
+1379,NAD,22-May-11,5,22,2011,no data,no data,"Mount Frances, Denali National Park",Petersville
+142,NAD,14-Jun-12,6,14,2012,no data,no data,"West Buttress, Denali",Petersville
+160,ADN,11-May-15,5,11,2015,Human,Human,Denali N.P,Petersville
+99,ADN,2-Jan-04,1,2,2004,no data,no data,"Portage (Spendard Glacier, 10m sout of Portage)",Portage
+100,StormData,28-Feb-04,2,28,2004,no data,no data - likey human,Byron Glacer in Portage Valley,Portage
+118,ADN,15-Feb-08,2,15,2008,Human,human (snowmachiners),Turnagain Pass,Portage
+140,ADN,16-Mar-12,3,16,2012,no data,no data,Turnagain Pass,Portage
+152,ADN,18-Dec-14,12,18,2014,Human,Human (Skiier),Turnagain Pass,Portage
+159,ADN,2-Apr-15,4,2,2015,no data,no data,Turnagain Pass,Portage
+170,ADN,29-Dec-16,12,29,2016,Natural,Natural,Turnagain Pass,Portage
+8,ADN,6-Dec-88,12,6,1988,no data,no data - unknown - There was extreme weather earlier in the week,Turnagain Pass,Portage
+36,StormData,31-Jan-98,1,31,1998,Natural,Natural - Extreme Weather,12 miles south of Portage and about 50 miles north of Seward.,Portage
+41,StormData,21-Mar-99,3,21,1999,Human,Human - snowmachiner,Turnagin Pass,Portage
+68,StormData,1-Jan-01,1,1,2001,no data,no data,Turnagin Pass,Portage
+120,ADN,23-Feb-08,2,23,2008,no data,no data - unknown - but following winter storm,Turnagain,Portage
+124,ADN,10-Dec-08,12,10,2008,Natural,Natural - winter storm,Turnagain Pass,Portage
+150,ADN,16-Mar-14,3,16,2014,Human,Human,Turnagain pass,Portage
+50,ADN,18-May-99,5,18,1999,no data,no data,Sitka,Sitka
+9,ADN,19-Nov-89,11,19,1989,Natural,Natural - Weather - Heavy snowfall,Hatcher Pass,Sutton
+26,ADN,2-Nov-94,11,2,1994,no data,no data,Hatcher Pass,Sutton
+43,ADN,31-Mar-99,3,31,1999,no data,no data,Hatcher Pass,Sutton
+51,ADN,16-Dec-99,12,16,1999,Human,human (snowmachiner),Hatcher Pass,Sutton
+52,ADN,26-Dec-99,12,26,1999,Human,human (snowmachiner),Hatcher Pass,Sutton
+54,ADN,2-Jan-00,1,2,2000,Human,human (snowmachiner),Hatcher Pass,Sutton
+76,StormData,11-Feb-01,2,11,2001,no data,no data,Hatcher Pass,Sutton
+80,ADN,11-Nov-01,11,11,2001,Natural,"natural, wind-slab avalanche",Hatcher Pass,Sutton
+91,ADN,20-Apr-02,4,20,2002,Natural,Natural - Heavy snowfall,Hatcher Pass,Sutton
+95,ADN,9-Feb-03,2,9,2003,Natural,Natural - likely weather,Hatcher pass,Sutton
+96,ADN,1-Mar-03,3,1,2003,Natural,Natural - Likely heavy snow,Hatcher pass,Sutton
+97,ADN,5-Mar-03,3,5,2003,no data,no data - likely heavey snow,Hatcher Pass,Sutton
+114,ADN,28-Feb-06,2,28,2006,Human,Human,Hatcher Pass,Sutton
+134,ADN,19-Mar-11,3,19,2011,Human,Human - AS - Skier,Hatcher Pass,Sutton
+143,ADN,2-Jan-13,1,2,2013,Human,Human (Skiier),Hatcher Pass,Sutton
+153,ADN,28-Dec-14,12,28,2014,no data,no data,Hatcher Pass,Sutton
+161,ADN,11-Nov-15,11,11,2015,Human,Human,Hatcher Pass,Sutton
+163,ADN,24-Nov-15,11,22,2015,no data,no data,Hatcher Pass,Sutton
+164,StormData,2-Jan-16,1,2,2016,Human,Human - AM - Snowmobile,Hatcher Pass,Sutton
+165,ADN,16-Jan-16,1,16,2016,Human,Human - AM - Snowmobile,Hatcher Pass,Sutton
+172,ADN,29-Jan-17,1,29,2017,no data,Other - Moose-triggered,Hatcher Pass,Sutton
+178,ADN,28-Oct-17,10,28,2017,Human,Human,Hatcher Pass,Sutton
+64,ADN,8-Apr-00,4,8,2000,no data,"no data, likely snowmachiner caused from telemarking","Talkeetna, AK",Talkeetna
+106,ADN,15-Mar-05,3,15,2005,Human,Human (Skiier),Talkeetna Mountains,Talkeetna
+21,ADN,20-Apr-93,4,20,1993,Human,Human,Valdez,Valdez
+61,StormData,7-Feb-00,2,7,2000,no data,no data - unknown - likely weather,Valdez,Valdez
+92,ADN,21-Apr-02,4,21,2002,Human,Human (Skiier),Valdez,Valdez
+98,ADN,11-Apr-03,4,11,2003,Human,human - skieer,"Valdez, 60 mi se of Chitina",Valdez
+115,ADN,20-Dec-06,12,20,2006,Natural,Natural - winter strom,Valdez through Thompson Pass,Valdez
+146,ADN,23-Jan-14,1,23,2014,Natural,Natural - likely weather,Valdez,Valdez
+147,StormData,24-Jan-14,1,24,2014,Natural,Natural,Valdez,Valdez
+148,ADN,31-Jan-14,1,31,2014,no data,no data,Valdez,Valdez
+22,ADN,4-Apr-93,4,4,1993,Human,Human,Chugach State Park - Klutina Glacier,Valdez
+35,ADN,28-Dec-97,12,28,1997,no data,no data - unknown,Thompson Pass,Valdez
+108,StormData,5-Feb-06,2,5,2006,Natural,Natural,Thompson Pass (Valdez),Valdez
+122,ADN,7-Apr-08,4,7,2008,no data,no data,Thompson pass,Valdez
+113,StormData,14-Feb-06,2,14,2006,no data,no data - but conditions were ripe,Pass Creek For Iditarod race),Skwentna
+123,ADN,27-Nov-08,11,27,2008,no data,no data,"Summit Lake, Kenai Peninsula",Moose Pass
+125,ADN,28-Mar-09,3,28,2009,no data,no data,Kenai Peninsula (Johnson Pass),Moose Pass
+126,ADN,31-Jan-10,1,31,2010,no data,no data,Kenai Peninsula (Spencer Glacier),Whittier
+128,ADN,13-Feb-10,2,13,2010,no data,no data - unknown,Kenai Peninsula (Spencer Glacier),Whittier
+130,ADN,18-Feb-10,2,18,2010,no data,no data - unknown,Kenai Peninsula (m. 85.5 and 86),Moose Pass
+132,NAD,29-May-10,5,29,2010,no data,no data,"Werewolf and London Tower, Ruth Gorge",Petersville
+158,NAD,1-Apr-15,4,1,2015,Human,Human - AF - Foot penetration,"North of Tebay Lakes, Wrangell-St. Elias National Park and Preserve",Chitina
+174,ADN,27-Feb-17,2,27,2017,no data,no data,Dalton Highway,Wiseman
