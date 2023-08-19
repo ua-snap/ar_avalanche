@@ -36,6 +36,12 @@ landfall_events_fp = OUTPUT_DIR.joinpath("landfall_ars_events.shp")
 # path to Alaska coastline shapefile (included in Github repo tree)
 ak_shp = Path("./shp/Alaska_Coast_Simplified_Polygon.shp")
 
+#path to Alaska point location table (included in Github repo tree)
+ak_pts = Path("./tbl/alaska_point_locations.csv")
+
+#path to revised avalanche database (included in Github repo tree)
+avy_db = Path("./tbl/avy_db_rev.csv")
+
 # ERA5 download parameters
 dataset = "reanalysis-era5-single-levels"
 varnames = ["vertical_integral_of_eastward_water_vapour_flux",
