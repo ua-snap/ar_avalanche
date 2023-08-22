@@ -24,8 +24,10 @@ from config import (
     shp_fp,
     csv_fp,
     ak_shp,
-    landfall_6hr_fp,
-    landfall_events_fp,
+    landfall_shp,
+    landfall_csv,
+    landfall_events_shp,
+    landfall_events_csv
 )
 
 
@@ -656,25 +658,53 @@ def create_shapefile(all_ars, shp_fp, csv_fp):
     ]
     col_dict = dict(zip(old_cols, new_cols))
     all_ars.rename(columns=col_dict, inplace=True)
-
+    #export shp
     all_ars.to_file(shp_fp)
 
-    pd.DataFrame.from_dict(data=col_dict, orient="index").to_csv(csv_fp, header=False)
+    #set up col descriptions for csv export
+    desc = [
+        'timestep of AR',
+        'original candidate region label of timestep AR',
+        'geometry string for AR polygon',
+        'length to width ratio of timestep AR',
+        'length (km) of timestep AR',
+        'orientation of timestep AR',
+        'poleward strength of timestep AR',
+        'directional coherence (%) of timestep AR',
+        'mean IVT direction of timestep AR',
+        'sum of IVT within timestep AR',
+        'sum of relative IVT (sum IVT/area) within timestep AR',
+        'Coherence in IVT direction (1 = True / 0 = False)',
+        'Mean Meridional IVT (1 = True / 0 = False)',
+        'Consistency Between Mean IVT Direction and Overall Orientation',
+        'Length (1 = True / 0 = False)',
+        'Length/Width Ratio (1 = True / 0 = False)',
+        'Number of criteria passed'
+    ]
+    csv_dict = dict(zip(new_cols, desc))
+    pd.DataFrame.from_dict(data=csv_dict, orient="index").to_csv(csv_fp, header=['shp_col', 'desc'])
 
 
-def landfall_ars_export(shp_fp, ak_shp, fp_6hr, fp_events):
-    """Filter the raw AR detection shapefile output to include only ARs making landfall in Alaska, and export the result to a new shapefile. Process the landfall ARs to condense adjacent dates into multipolygons, and export the result to a second new shapefile.
+def landfall_ars_export(shp_fp, csv_fp, ak_shp, landfall_shp, landfall_csv, landfall_events_shp, landfall_events_csv):
+    """Filter the raw AR detection shapefile output to include only ARs making landfall in Alaska, and export the result to a new shapefile. Process the landfall ARs to condense adjacent dates into event multipolygons, and export the result to a second new shapefile. For both outputs, include a CSV with column names and descriptions.
 
     Parameters
     ----------
     shp_fp : PosixPath
         File path to the raw AR detection shapefile input.
+    csv_fp : PosixPath
+        File path to the raw AR detection csv input.   
     ak_shp : PosixPath
         File path to the Alaska coastline shapefile input.
-    fp_6hr : PosixPath
-        File path for the raw 6hr interval landfall AR shapefile output.
-    fp_events : PosixPath
+    landfall_shp : PosixPath
+        File path for the landfalling AR shapefile output.
+    landfall_csv : PosixPath
+        File path for the landfalling AR csv output.
+    landfall_events_shp : PosixPath
         File path for the condensed landfall AR events shapefile output.
+    landfall_events_csv : PosixPath
+        File path for the landfalling AR events csv output.
+        
 
     Returns
     -------
@@ -700,8 +730,11 @@ def landfall_ars_export(shp_fp, ak_shp, fp_6hr, fp_events):
     # perform spatial join, keeping only AR polygons that intersect with the AK polygon
     ak_ars = ars.sjoin(ak_d, how="inner", predicate="intersects")
 
-    # export raw 6hr geodataframe to shp
-    ak_ars.drop(columns=["dt", "index_right", "FEATURE"]).to_file(fp_6hr, index=True)
+    # export landfall geodataframe to shp
+    ak_ars.drop(columns=["dt", "index_right", "FEATURE"]).to_file(landfall_shp, index=True)
+    # copy original AR detection csv to the landfall fp (these two outputs have the same exact fields)
+    t = pd.read_csv(csv_fp)
+    t.to_csv(landfall_csv)
 
     # wrap the circular mean function using max 360 arg
     def circ_mean(x):
@@ -790,7 +823,30 @@ def landfall_ars_export(shp_fp, ak_shp, fp_6hr, fp_events):
     events["end"] = events["end"].astype(str)
 
     # export condensed event AR geodataframe to shp
-    events.to_file(fp_events, index=True)
+    events.to_file(landfall_events_shp, index=True)
+
+    # set up AR events columns decription table
+    cols = events.columns.to_list()
+    desc = [
+        'first timestep of AR event',
+        'last timestep of AR event',
+        'sum of IVT across all timestep ARs in event',
+        'sum of relative IVT (sum IVT/area) across all timestep ARs in event',
+        'mean length to width ratio across all timestep ARs in event',
+        'mean length (km) across all timestep ARs in event',
+        'mean orientation across all timestep ARs in event',
+        'mean poleward strength across all timestep ARs in event',
+        'mean directional coherence (%) across all timestep ARs in event',
+        'mean IVT direction across all timestep ARs in event',
+        'duration of AR event',
+        'sum of AR event total intensity divided by AR event duration',
+        'sum of AR event relative intensity divided by AR event duration',
+        'geometry string for AR event polygons'
+        ]
+
+    csv_dict = dict(zip(cols, desc))
+    # export event AR column description table to csv
+    pd.DataFrame.from_dict(data=csv_dict, orient="index").to_csv(landfall_events_csv, header=['shp_col', 'desc'])
 
 
 def detect_all_ars(fp, n_criteria, out_shp, out_csv, ak_shp, fp_6hr, fp_events):
