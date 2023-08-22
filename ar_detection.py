@@ -11,13 +11,22 @@ from tqdm import tqdm
 from scipy.ndimage import label, generate_binary_structure
 from skimage.measure import regionprops
 from scipy.stats import circmean
+from scipy.sparse.csgraph import connected_components
 from haversine import haversine
 from shapely.geometry import shape
 from rasterio.features import shapes
 from datetime import datetime
 
 
-from config import ar_params, ard_fp, shp_fp, csv_fp, ak_shp, landfall_6hr_fp, landfall_events_fp
+from config import (
+    ar_params,
+    ard_fp,
+    shp_fp,
+    csv_fp,
+    ak_shp,
+    landfall_6hr_fp,
+    landfall_events_fp,
+)
 
 
 def compute_intensity_mask(ivt_mag, ivt_quantile, ivt_floor):
@@ -38,7 +47,7 @@ def compute_intensity_mask(ivt_mag, ivt_quantile, ivt_floor):
         IVT magnitude values where the magnitude exceeds the quantile and the IVT floor. Else, zero.
     """
     func = lambda x, y, z: xr.where((x > y) & (x > z), x, 0)
-    return xr.apply_ufunc(func, ivt_mag, ivt_quantile, ivt_floor, dask='parallelized')
+    return xr.apply_ufunc(func, ivt_mag, ivt_quantile, ivt_floor, dask="parallelized")
 
 
 def label_contiguous_mask_regions(ivt_mask):
@@ -55,11 +64,11 @@ def label_contiguous_mask_regions(ivt_mask):
         Labeled (with unique integers) contiguous regions of IVT threshold exceedance.
     """
     # set search structure to include diagonal neighbors
-    s = generate_binary_structure(2,2)
+    s = generate_binary_structure(2, 2)
     # initialize output by copying ivt_mask, renaming it, setting values to nodata value
     # this constructs a template DataArray with the same size/dimensions as the input to store region labeling results
-    da = ivt_mask.copy(deep=False).rename('regions').where(ivt_mask.values == -9999)
-    
+    da = ivt_mask.copy(deep=False).rename("regions").where(ivt_mask.values == -9999)
+
     # CP note: perhaps a good candidate for vectorizing or parallelization
     for a in range(len(ivt_mask.time)):
         # label contiguous regions of each timestep
@@ -94,24 +103,29 @@ def generate_region_properties(labeled_blobs, ds):
     - 'p72.162': IVT poleward component values
     """
     ar_di = {}
-    for labeled_slice, ivt_magnitude, ivt_poleward, ivt_dir in zip(labeled_blobs,
-                                                                   ds["ivt_mag"],
-                                                                   ds["ivt_dir"],
-                                                                   ds["p72.162"]):
+    for labeled_slice, ivt_magnitude, ivt_poleward, ivt_dir in zip(
+        labeled_blobs, ds["ivt_mag"], ds["ivt_dir"], ds["p72.162"]
+    ):
         timestamp = labeled_slice.time.values.astype(str)
         ar_di[timestamp] = {}
-        
+
         # this sub-dict will store the measurements and criteria results
         ar_di[timestamp]["ar_targets"] = {}
         for i in np.unique(labeled_slice.astype(int).values)[1:]:
             ar_di[timestamp]["ar_targets"][i] = {}
-    
+
         # generate lazy zonal statistics, shape metrics for each region within a time slice for all variables
-        ar_di[timestamp]["blobs with IVT magnitude"] = regionprops(labeled_slice.astype(int).values, intensity_image=ivt_magnitude.data)
-    
-        ar_di[timestamp]["blobs with IVT poleward"] = regionprops(labeled_slice.astype(int).values, intensity_image=ivt_poleward.data)
-        
-        ar_di[timestamp]["blobs with IVT direction"] = regionprops(labeled_slice.astype(int).values,intensity_image=ivt_dir.data)
+        ar_di[timestamp]["blobs with IVT magnitude"] = regionprops(
+            labeled_slice.astype(int).values, intensity_image=ivt_magnitude.data
+        )
+
+        ar_di[timestamp]["blobs with IVT poleward"] = regionprops(
+            labeled_slice.astype(int).values, intensity_image=ivt_poleward.data
+        )
+
+        ar_di[timestamp]["blobs with IVT direction"] = regionprops(
+            labeled_slice.astype(int).values, intensity_image=ivt_dir.data
+        )
     return ar_di
 
 
@@ -135,13 +149,13 @@ def get_length_width_ratio(blob):
     The length-to-width ratio is calculated as the ratio of 'axis_major_length' to 'axis_minor_length'.
     """
     try:
-        length_width_ratio = (blob.axis_major_length / blob.axis_minor_length)
+        length_width_ratio = blob.axis_major_length / blob.axis_minor_length
     except:
         # for divide by zero errors
         length_width_ratio = 0
     length_width_ratio = round(length_width_ratio, 1)
     return blob.label, length_width_ratio
-                                                      
+
 
 def get_major_axis_haversine_distance(blob, ds):
     """
@@ -170,16 +184,77 @@ def get_major_axis_haversine_distance(blob, ds):
     """
     y0, x0 = blob.centroid
     orientation = blob.orientation
-    # find endpoints of the minor and major axes with respect to the centroid
+    # find endpoints of the major axes with respect to the centroid
     # note that we force integers because we ultimately desire array indices
     y0 = int(y0)
     x0 = int(x0)
-    x1 = int(x0 + math.cos(orientation) * 0.5 * blob.axis_minor_length)
-    y1 = int(y0 - math.sin(orientation) * 0.5 * blob.axis_minor_length)
-    x2 = int(x0 - math.sin(orientation) * 0.5 * blob.axis_major_length)
-    y2 = int(y0 - math.cos(orientation) * 0.5 * blob.axis_major_length)
+    x1 = int(x0 - math.sin(orientation) * 0.5 * blob.axis_major_length)
+    y1 = int(y0 - math.cos(orientation) * 0.5 * blob.axis_major_length)
 
-    # the ellipse model used to find the orientation and major/minor axes lengths may extend into cartesian space that is beyond
+    # the ellipse model used to find the orientation and major axis lengths may extend into cartesian space that is beyond
+    # the geographic extent of the data, so we will check and correct
+    if x1 < 0:
+        x1 = 0
+    elif x1 >= ds.longitude.shape[0]:
+        x1 = ds.longitude.shape[0] - 1
+    if y1 < 0:
+        y1 = 0
+    elif y1 >= ds.latitude.shape[0]:
+        y1 = ds.latitude.shape[0] - 1
+
+    # use the array indices to select the latitude and longitude of the centroid and a major axis endpoint
+    centroid_lat = ds.latitude[y0].values
+    centroid_lon = ds.longitude[x0].values
+    geo_centroid = (centroid_lat, centroid_lon)
+    major_lat = ds.latitude[y1].values
+    major_lon = ds.longitude[x1].values
+    geo_major_axis_endpoint = (major_lat, major_lon)
+
+    # total major axis length will be twice the distance between these points
+    # haversine distance used because we expect points to be substantially far apart
+    half_major_axis_length = haversine(geo_centroid, geo_major_axis_endpoint)
+    # km is default unit for haversine function
+    major_axis_length_km = round(half_major_axis_length * 2)
+    return blob.label, major_axis_length_km
+
+
+def get_azimuth_of_furthest_points(blob, ds):
+    """
+    Compute the forward azimuth of the major axis of a labeled region.
+
+    Parameters
+    ----------
+    blob : skimage.measure._regionprops.RegionProperties
+        Region properties object representing a labeled region.
+    ds : xarray.Dataset
+        must have latitude and longitude coordinates.
+
+    Returns
+    -------
+    tuple
+        (label of the region, forward azimuth of the major axis)
+
+    Notes
+    -----
+    The function calculates the forward azimuth of the major axis of a labeled region using the region's centroid and orientation properties. It also requires the input dataset ('ds') containing latitude and longitude
+    coordinates for spatial reference.
+
+    The major axis is defined by three points: the region's centroid and two endpoints that extend half the length of the major axis from the centroid along the region's orientation. The function calculates the latitude and longitude of the end points using the orientation and axis lengths provided by the 'blob' object.
+
+    The coordinates of the major axis endpoints are then used to compute the geographic forward azimuth of the region.
+    """
+    y0, x0 = blob.centroid
+    orientation = blob.orientation
+    # find endpoints of the major axis with respect to the centroid
+    # note that we force integers because we ultimately desire array indices
+    y0 = int(y0)
+    x0 = int(x0)
+    x1 = int(x0 - math.sin(orientation) * 0.5 * blob.axis_major_length)
+    y1 = int(y0 - math.cos(orientation) * 0.5 * blob.axis_major_length)
+    x2 = int(x0 + math.sin(orientation) * 0.5 * blob.axis_major_length)
+    y2 = int(y0 + math.cos(orientation) * 0.5 * blob.axis_major_length)
+
+    # the ellipse model used to find the orientation and major axis lengths may extend into cartesian space that is beyond
     # the geographic extent of the data, so we will check and correct
     if x1 < 0:
         x1 = 0
@@ -198,63 +273,19 @@ def get_major_axis_haversine_distance(blob, ds):
     elif y2 >= ds.latitude.shape[0]:
         y2 = ds.latitude.shape[0] - 1
 
-    # use the array indices to select the latitude and longitude of the centroid and a major axis endpoint
-    centroid_lat = ds.latitude[y0].values
-    centroid_lon = ds.longitude[x0].values
-    geo_centroid = (centroid_lat, centroid_lon)
-    major_lat = ds.latitude[y2].values
-    major_lon = ds.longitude[x2].values
-    geo_major_axis_endpoint = (major_lat, major_lon)
-    
-    # total axis length will be twice the distance between these points
-    # haversine distance used because we expect points to be substantially far apart
-    half_major_axis_length = haversine(geo_centroid, geo_major_axis_endpoint)
-    # km is default unit for haversine function
-    major_axis_length_km = round(half_major_axis_length * 2)
-    return blob.label, major_axis_length_km
+    # use the array indices to select the latitude and longitude of the major axis endpoints
+    major_lat1 = ds.latitude[y1].values
+    major_lon1 = ds.longitude[x1].values
+    major_lat2 = ds.latitude[y2].values
+    major_lon2 = ds.longitude[x2].values
 
-
-def get_azimuth_of_furthest_points(blob, ds):
-    """
-    Compute the forward azimuth of the bounding box diagonal of a labeled region.
-
-    Parameters
-    ----------
-    blob : skimage.measure._regionprops.RegionProperties
-        Region properties object representing a labeled region.
-    ds : xarray.Dataset
-        must have latitude and longitude coordinates.
-
-    Returns
-    -------
-    tuple
-        (label of the region, forward azimuth of the bounding box diagonal)
-
-    Notes
-    -----
-    The bounding box diagonal is the line connecting the lower-left corner to the upper-right corner of the region's bounding box. This is making an assumption, but given the configuration of land and ocean in the NW Pacific region, it is likely appropriate. If any bounding box coordinates exceed the dimensions of the dataset because of indexing, they are corrected to ensure they fall within valid bounds. The 'geodesic.inv' method from the pyproj library calculates the forward azimuth between the lower-left and upper-right corners.
-    """
-    minrow, mincol, maxrow, maxcol = blob.bbox
-
-    if maxrow >= ds.latitude.shape[0]:
-        maxrow = ds.latitude.shape[0] - 1
-    if maxcol >= ds.longitude.shape[0]:
-        maxcol = ds.longitude.shape[0] - 1
-
-    upper_lat = ds.latitude[minrow].values
-    left_lon = ds.longitude[mincol].values
-    lower_lat = ds.latitude[maxrow].values
-    right_lon = ds.longitude[maxcol].values
-    
-    # JP: the lats below were reversed, which caused a backwards bbox and the forward azimuth result to be reversed...keeping original below for reference
-    # lower_lat = ds.latitude[minrow].values
-    # left_lon = ds.longitude[mincol].values
-    # upper_lat = ds.latitude[maxrow].values
-    # right_lon = ds.longitude[maxcol].values
-    
+    # calculate the forward azimuth using WGS84 geoid and the inv function
+    # for the northern hemisphere, the function needs the more southerly coords first
     geodesic = pyproj.Geod(ellps="WGS84")
-    fwd_azimuth, _back_azimuth, _distance = geodesic.inv(left_lon, lower_lat, right_lon, upper_lat)
-    
+    fwd_azimuth, _back_azimuth, _distance = geodesic.inv(
+        major_lon2, major_lat2, major_lon1, major_lat1
+    )
+
     return blob.label, round(fwd_azimuth)
 
 
@@ -272,7 +303,7 @@ def get_poleward_strength(blob):
     tuple
         (label of the region, mean poleward strength)
     """
-    return blob.label, round(blob.intensity_mean)    
+    return blob.label, round(blob.intensity_mean)
 
 
 def get_directional_coherence(blob):
@@ -299,6 +330,7 @@ def get_directional_coherence(blob):
     total_pixels = blob.image_intensity.size
     pct_coherent = round((pixel_count / total_pixels) * 100)
     return blob.label, pct_coherent, mean_reference_deg
+
 
 def get_total_ivt_strength(blob):
     """
@@ -331,7 +363,7 @@ def get_relative_ivt_strength(blob):
     tuple
         (label of the region, relative IVT strength)
     """
-    return blob.label, round(blob.image_intensity.sum()/blob.area)
+    return blob.label, round(blob.image_intensity.sum() / blob.area)
 
 
 def get_data_for_ar_criteria(ar_di, ds):
@@ -358,38 +390,54 @@ def get_data_for_ar_criteria(ar_di, ds):
         for blob in ar_di[k]["blobs with IVT magnitude"]:
             int_label, ratio = get_length_width_ratio(blob)
             ar_di[k]["ar_targets"][int_label]["length/width ratio"] = ratio
-    
+
     for k in tqdm(ar_di, desc="Getting axis length (km) for each AR target:"):
         for blob in ar_di[k]["blobs with IVT magnitude"]:
-            int_label, major_axis_length_km = get_major_axis_haversine_distance(blob, ds)
-            ar_di[k]["ar_targets"][int_label]["major axis length (km)"] = major_axis_length_km
-    
-    for k in tqdm(ar_di, desc="Getting overall orientation (azimuth) for each AR target:"):
+            int_label, major_axis_length_km = get_major_axis_haversine_distance(
+                blob, ds
+            )
+            ar_di[k]["ar_targets"][int_label][
+                "major axis length (km)"
+            ] = major_axis_length_km
+
+    for k in tqdm(
+        ar_di, desc="Getting overall orientation (azimuth) for each AR target:"
+    ):
         for blob in ar_di[k]["blobs with IVT magnitude"]:
-            int_label, max_distance_mean_azimuth = get_azimuth_of_furthest_points(blob, ds)
-            ar_di[k]["ar_targets"][int_label]["overall orientation"] = max_distance_mean_azimuth
+            int_label, max_distance_mean_azimuth = get_azimuth_of_furthest_points(
+                blob, ds
+            )
+            ar_di[k]["ar_targets"][int_label][
+                "overall orientation"
+            ] = max_distance_mean_azimuth
 
     for k in tqdm(ar_di, desc="Getting mean poleward strength for each AR target:"):
         for blob in ar_di[k]["blobs with IVT poleward"]:
             int_label, mean_poleward_strength = get_poleward_strength(blob)
-            ar_di[k]["ar_targets"][int_label]["mean poleward strength"] = mean_poleward_strength
+            ar_di[k]["ar_targets"][int_label][
+                "mean poleward strength"
+            ] = mean_poleward_strength
 
     for k in tqdm(ar_di, desc="Getting directional coherence for each AR target:"):
         for blob in ar_di[k]["blobs with IVT direction"]:
             int_label, pct_coherent, mean_of_ivt_dir = get_directional_coherence(blob)
             ar_di[k]["ar_targets"][int_label]["directional_coherence"] = pct_coherent
-            ar_di[k]["ar_targets"][int_label]["mean_of_ivt_dir"] = round(mean_of_ivt_dir)
+            ar_di[k]["ar_targets"][int_label]["mean_of_ivt_dir"] = round(
+                mean_of_ivt_dir
+            )
 
     for k in tqdm(ar_di, desc="Getting total IVT strength for each AR target:"):
         for blob in ar_di[k]["blobs with IVT magnitude"]:
             int_label, total_ivt_strength = get_total_ivt_strength(blob)
             ar_di[k]["ar_targets"][int_label]["total ivt strength"] = total_ivt_strength
-        
+
     for k in tqdm(ar_di, desc="Getting relative IVT strength for each AR target:"):
         for blob in ar_di[k]["blobs with IVT magnitude"]:
             int_label, relative_ivt_strength = get_relative_ivt_strength(blob)
-            ar_di[k]["ar_targets"][int_label]["relative ivt strength"] = relative_ivt_strength
-    
+            ar_di[k]["ar_targets"][int_label][
+                "relative ivt strength"
+            ] = relative_ivt_strength
+
     return ar_di
 
 
@@ -411,32 +459,57 @@ def apply_criteria(ar_di):
     -----
     Criteria include coherence in IVT direction, object mean meridional IVT, consistency between object mean IVT direction and overall orientation, length, and length/width ratio. Function iterates through each time slice and processes the labeled regions within each time slice. For each labeled region, the function checks the calculated measurements against specific thresholds to determine if the region meets the criteria. The AR candidate classification results (True or False) are stored under appropriate keys.
     """
-    criteria = ["Coherence in IVT Direction", "Mean Meridional IVT",
-                    "Consistency Between Mean IVT Direction and Overall Orientation", "Length" ,"Length/Width Ratio"]
-    
+    criteria = [
+        "Coherence in IVT Direction",
+        "Mean Meridional IVT",
+        "Consistency Between Mean IVT Direction and Overall Orientation",
+        "Length",
+        "Length/Width Ratio",
+    ]
+
     for k in tqdm(ar_di):
         for blob_label in ar_di[k]["ar_targets"]:
-    
             for criterion in criteria:
                 ar_di[k]["ar_targets"][blob_label][criterion] = False
             # Length / width ratio criterion
             if ar_di[k]["ar_targets"][blob_label]["length/width ratio"] > 2:
                 ar_di[k]["ar_targets"][blob_label]["Length/Width Ratio"] = True
             # Axis length criterion
-            if ar_di[k]["ar_targets"][blob_label]["major axis length (km)"] > ar_params["min_axis_length"]:
-                    ar_di[k]["ar_targets"][blob_label]["Length"] = True
+            if (
+                ar_di[k]["ar_targets"][blob_label]["major axis length (km)"]
+                > ar_params["min_axis_length"]
+            ):
+                ar_di[k]["ar_targets"][blob_label]["Length"] = True
             # Directional coherence criterion
             if ar_di[k]["ar_targets"][blob_label]["directional_coherence"] > 50:
                 ar_di[k]["ar_targets"][blob_label]["Coherence in IVT Direction"] = True
             # Strong poleward component criterion
-            if ar_di[k]["ar_targets"][blob_label]["mean poleward strength"] > ar_params["mean_meridional"]:
+            if (
+                ar_di[k]["ar_targets"][blob_label]["mean poleward strength"]
+                > ar_params["mean_meridional"]
+            ):
                 ar_di[k]["ar_targets"][blob_label]["Mean Meridional IVT"] = True
             # Consistency Between Mean IVT Direction and Overall Orientation criterion
-            if abs(180 - (180 - ar_di[k]["ar_targets"][blob_label]["mean_of_ivt_dir"] + ar_di[k]["ar_targets"][blob_label]["overall orientation"]) % 360) < ar_params["orientation_deviation_threshold"]:
-                ar_di[k]["ar_targets"][blob_label]["Consistency Between Mean IVT Direction and Overall Orientation"] = True
-    
+            if (
+                abs(
+                    180
+                    - (
+                        180
+                        - ar_di[k]["ar_targets"][blob_label]["mean_of_ivt_dir"]
+                        + ar_di[k]["ar_targets"][blob_label]["overall orientation"]
+                    )
+                    % 360
+                )
+                < ar_params["orientation_deviation_threshold"]
+            ):
+                ar_di[k]["ar_targets"][blob_label][
+                    "Consistency Between Mean IVT Direction and Overall Orientation"
+                ] = True
+
             # how many criteria were met?
-            ar_di[k]["ar_targets"][blob_label]["Criteria Passed"] = list(map(ar_di[k]["ar_targets"][blob_label].get, criteria)).count(True)
+            ar_di[k]["ar_targets"][blob_label]["Criteria Passed"] = list(
+                map(ar_di[k]["ar_targets"][blob_label].get, criteria)
+            ).count(True)
     return ar_di
 
 
@@ -462,13 +535,15 @@ def filter_ars(ar_di, n_criteria_required=5):
     """
     filtered_ars = {}
     for k in tqdm(ar_di):
-
         passing_blobs_list = []
 
         for blob_label in ar_di[k]["ar_targets"]:
-            if ar_di[k]["ar_targets"][blob_label]["Criteria Passed"] >= n_criteria_required:
+            if (
+                ar_di[k]["ar_targets"][blob_label]["Criteria Passed"]
+                >= n_criteria_required
+            ):
                 passing_blobs_list.append(blob_label)
-        
+
         if len(passing_blobs_list) > 0:
             filtered_ars[k] = passing_blobs_list
 
@@ -493,7 +568,7 @@ def create_geodataframe_with_all_ars(filtered_ars, ar_di, labeled_blobs, ivt_ds)
     Returns
     -------
     geopandas.GeoDataFrame
-        GeoDataFrame containing polygons representing all ARs meeting the criteria. 
+        GeoDataFrame containing polygons representing all ARs meeting the criteria.
 
     Notes
     -----
@@ -506,10 +581,9 @@ def create_geodataframe_with_all_ars(filtered_ars, ar_di, labeled_blobs, ivt_ds)
     gdfs = []
 
     for k in tqdm(filtered_ars):
-
         l = labeled_blobs.sel(time=k)
-                
-        r = shapes(l, mask = l.isin(filtered_ars[k]), connectivity=8, transform=aff)
+
+        r = shapes(l, mask=l.isin(filtered_ars[k]), connectivity=8, transform=aff)
         ar_polys = list(r)
 
         blob_geom = [shape(i[0]) for i in ar_polys]
@@ -518,14 +592,21 @@ def create_geodataframe_with_all_ars(filtered_ars, ar_di, labeled_blobs, ivt_ds)
         blob_labels = [i[1] for i in ar_polys]
         blob_labels = pd.Series(blob_labels)
 
-        blob_props = [ar_di[k]['ar_targets'][i] for i in blob_labels]     
+        blob_props = [ar_di[k]["ar_targets"][i] for i in blob_labels]
 
-        result = gpd.GeoDataFrame({'time': k, 'blob_label': blob_labels, 'blob_props': blob_props, 'geometry': blob_geom})
-        
+        result = gpd.GeoDataFrame(
+            {
+                "time": k,
+                "blob_label": blob_labels,
+                "blob_props": blob_props,
+                "geometry": blob_geom,
+            }
+        )
+
         m = result.blob_props.apply(pd.Series)
         new_cols = m.columns.values.tolist()
         result[new_cols] = m
-        result.drop('blob_props', axis=1, inplace=True)
+        result.drop("blob_props", axis=1, inplace=True)
 
         gdfs.append(result)
 
@@ -554,13 +635,31 @@ def create_shapefile(all_ars, shp_fp, csv_fp):
     None
     """
     old_cols = all_ars.columns.to_list()
-    new_cols = ['time', 'label', 'geometry', 'ratio', 'length', 'orient', 'poleward', 'dir_coher', 'mean_dir', 'tot_str', 'rel_str', 'crit1', 'crit2', 'crit3', 'crit4', 'crit5', 'crit_cnt']
-    col_dict = dict(zip(old_cols,new_cols))
+    new_cols = [
+        "time",
+        "label",
+        "geometry",
+        "ratio",
+        "length",
+        "orient",
+        "poleward",
+        "dir_coher",
+        "mean_dir",
+        "tot_str",
+        "rel_str",
+        "crit1",
+        "crit2",
+        "crit3",
+        "crit4",
+        "crit5",
+        "crit_cnt",
+    ]
+    col_dict = dict(zip(old_cols, new_cols))
     all_ars.rename(columns=col_dict, inplace=True)
 
     all_ars.to_file(shp_fp)
 
-    pd.DataFrame.from_dict(data=col_dict, orient='index').to_csv(csv_fp, header=False)
+    pd.DataFrame.from_dict(data=col_dict, orient="index").to_csv(csv_fp, header=False)
 
 
 def landfall_ars_export(shp_fp, ak_shp, fp_6hr, fp_events):
@@ -592,42 +691,99 @@ def landfall_ars_export(shp_fp, ak_shp, fp_6hr, fp_events):
 
     # add new datetime column to ars gdf by parsing ISO timestamp
     # reformat time column string for output (datetime fields not supported in ESRI shp files)
-    ars['dt'] = [datetime.fromisoformat(ars.time.iloc[[d]].values[0][:-16]) for d in range(len(ars))]
-    ars['time'] = ars['dt'].astype(str)
+    ars["dt"] = [
+        datetime.fromisoformat(ars.time.iloc[[d]].values[0][:-16])
+        for d in range(len(ars))
+    ]
+    ars["time"] = ars["dt"].astype(str)
 
     # perform spatial join, keeping only AR polygons that intersect with the AK polygon
-    ak_ars = ars.sjoin(ak_d, how='inner', predicate='intersects')
+    ak_ars = ars.sjoin(ak_d, how="inner", predicate="intersects")
 
     # export raw 6hr geodataframe to shp
-    ak_ars.drop(columns=['dt', 'index_right', 'FEATURE']).to_file(fp_6hr, index=True)
+    ak_ars.drop(columns=["dt", "index_right", "FEATURE"]).to_file(fp_6hr, index=True)
 
-    # label any ARs occuring on adjacent dates with a unique "diff" ID
-    # for each ID, turn first and last timestep into gdf attributes and combine their geometry into one multipolygon feature
+    # label any ARs occuring on adjacent dates with a unique "diff" ID and inspect as a subset dfs
+    # use connected components of  a matrix to label the spatially overlapping groups of polygons in each subset df
+    # (this allows for separation of multiple non-overlapping AR events occuring in the same time period)
+    # dissolve geometry by group and aggregate values into new columns; calculate new properties before concat and export
 
-    ak_ars['diff'] = ak_ars['dt'].diff().dt.days.gt(1).cumsum()
+    ak_ars["diff"] = ak_ars["dt"].diff().dt.days.gt(1).cumsum()
 
     dfs = []
 
-    for d in ak_ars['diff'].unique():
-        sub = ak_ars[ak_ars['diff'] == d]
-        geo = shapely.multipolygons([sub.geometry])
-        df = gpd.GeoDataFrame({
-            'event_id':d,
-            'start':sub['dt'].min(),
-            'end':sub['dt'].max(),
-            'sumtot_str':sub['tot_str'].sum(),
-            'sumrel_str':sub['rel_str'].sum(),
-            'geometry':geo
-            })
-        dfs.append(df)
+    for d in ak_ars["diff"].unique():
+        sub = ak_ars[ak_ars["diff"] == d].copy()
+
+        # spatial overlap analysis of adjacent date subset
+        overlap_matrix = sub.geometry.apply(
+            lambda x: sub.geometry.intersects(x)
+        ).values.astype(int)
+        n, labels = connected_components(overlap_matrix)
+        sub["group"] = labels
+        sub["start"] = sub["dt"]
+        sub["end"] = sub["dt"]
+        sub["sumtot_str"] = sub["tot_str"]
+        sub["sumrel_str"] = sub["rel_str"]
+        sub["ratio_m"] = sub["ratio"]
+        sub["len_km_m"] = sub["length"]
+        sub["orient_m"] = sub["orient"]
+        sub["poleward_m"] = sub["poleward"]
+        sub["dircoher_m"] = sub["dir_coher"]
+        sub["mean_dir_m"] = sub["mean_dir"]
+
+        # dissolve geometry and aggregate
+        res = sub.dissolve(
+            by="group",
+            aggfunc={
+                "start": "min",
+                "end": "max",
+                "sumtot_str": "sum",
+                "sumrel_str": "sum",
+                "ratio_m": "mean",
+                "len_km_m": "mean",
+                "orient_m": "mean",
+                "poleward_m": "mean",
+                "dircoher_m": "mean",
+                "mean_dir_m": "mean",
+            },
+        )
+
+        # calculate duration from datetime columns
+        for i in res.index:
+            # after subtracting, add 6hrs as minimum event length.... this assures a single timestep event is not zero duration!
+            res.loc[i, "dur_hrs"] = (
+                (res["end"][i] - res["start"][i]).total_seconds() / 3600
+            ) + 6
+
+        # calculate total and relative intensity
+        res["tintensity"] = res["sumtot_str"] / res["dur_hrs"]
+        res["rintensity"] = res["sumrel_str"] / res["dur_hrs"]
+
+        # round results
+        res = res.round(
+            {
+                "ratio_m": 0,
+                "len_km_m": 0,
+                "orient_m": 0,
+                "poleward_m": 0,
+                "dircoher_m": 0,
+                "mean_dir_m": 0,
+                "dur_hrs": 0,
+                "tintensity": 0,
+                "rintensity": 0,
+            }
+        )
+
+        dfs.append(res)
 
     events = pd.concat(dfs)
-    events.set_index('event_id', inplace=True)
+    events = events.reset_index(drop=True).rename(columns={"index": "event_id"})
     events.crs = ars.crs
 
     # reset datetime columns as strings for output (datetime fields not supported in ESRI shp files)
-    events['start'] = events['start'].astype(str)
-    events['end'] = events['end'].astype(str)
+    events["start"] = events["start"].astype(str)
+    events["end"] = events["end"].astype(str)
 
     # export condensed event AR geodataframe to shp
     events.to_file(fp_events, index=True)
@@ -655,13 +811,17 @@ def detect_all_ars(fp, n_criteria, out_shp, out_csv, ak_shp, fp_6hr, fp_events):
     """
     with xr.open_dataset(fp) as ivt_ds:
         ivt_ds.rio.write_crs("epsg:4326", inplace=True)
-        ivt_ds["thresholded"] = compute_intensity_mask(ivt_ds["ivt_mag"], ivt_ds["ivt_quantile"], ar_params["ivt_floor"])
+        ivt_ds["thresholded"] = compute_intensity_mask(
+            ivt_ds["ivt_mag"], ivt_ds["ivt_quantile"], ar_params["ivt_floor"]
+        )
         labeled_regions = label_contiguous_mask_regions(ivt_ds["thresholded"])
         ar_di = generate_region_properties(labeled_regions, ivt_ds)
         ar_di = get_data_for_ar_criteria(ar_di, ivt_ds)
         ar_di = apply_criteria(ar_di)
         output_ars = filter_ars(ar_di, n_criteria_required=n_criteria)
-        output_ar_gdf = create_geodataframe_with_all_ars(output_ars, ar_di, labeled_regions, ivt_ds)
+        output_ar_gdf = create_geodataframe_with_all_ars(
+            output_ars, ar_di, labeled_regions, ivt_ds
+        )
         create_shapefile(output_ar_gdf, out_shp, out_csv)
         landfall_ars_export(out_shp, ak_shp, fp_6hr, fp_events)
 
@@ -669,21 +829,68 @@ def detect_all_ars(fp, n_criteria, out_shp, out_csv, ak_shp, fp_6hr, fp_events):
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Detect atmospheric rivers and generate shapefile output.")
-    parser.add_argument("--input_file", type=str, default=ard_fp, help="File path to the IVT dataset in NetCDF format.")
-    parser.add_argument("--n_criteria", type=int, default=5, help="Number criteria required to consider a region an AR.")
-    parser.add_argument("--output_ar_shapefile", type=str, default=shp_fp, help="File path to save the full AR shapefile output.")
-    parser.add_argument("--output_csv", type=str, default=csv_fp, help="File path to save the CSV output.")
-    parser.add_argument("--ak_shapefile", type=str, default=ak_shp, help="File path of AK shapefile input.")
-    parser.add_argument("--output_6hr_shapefile", type=str, default=landfall_6hr_fp, help="File path to save the 6hr landfall AR shapefile output.")
-    parser.add_argument("--output_events_shapefile", type=str, default=landfall_events_fp, help="File path to save landfall AR events shapefile output.")
-
+    parser = argparse.ArgumentParser(
+        description="Detect atmospheric rivers and generate shapefile output."
+    )
+    parser.add_argument(
+        "--input_file",
+        type=str,
+        default=ard_fp,
+        help="File path to the IVT dataset in NetCDF format.",
+    )
+    parser.add_argument(
+        "--n_criteria",
+        type=int,
+        default=5,
+        help="Number criteria required to consider a region an AR.",
+    )
+    parser.add_argument(
+        "--output_ar_shapefile",
+        type=str,
+        default=shp_fp,
+        help="File path to save the full AR shapefile output.",
+    )
+    parser.add_argument(
+        "--output_csv",
+        type=str,
+        default=csv_fp,
+        help="File path to save the CSV output.",
+    )
+    parser.add_argument(
+        "--ak_shapefile",
+        type=str,
+        default=ak_shp,
+        help="File path of AK shapefile input.",
+    )
+    parser.add_argument(
+        "--output_6hr_shapefile",
+        type=str,
+        default=landfall_6hr_fp,
+        help="File path to save the 6hr landfall AR shapefile output.",
+    )
+    parser.add_argument(
+        "--output_events_shapefile",
+        type=str,
+        default=landfall_events_fp,
+        help="File path to save landfall AR events shapefile output.",
+    )
 
     args = parser.parse_args()
 
-    print(f"Using the IVT input {args.input_file} to filter candidate ARs based on {args.n_criteria} criteria.")
-    
-    detect_all_ars(fp=args.input_file, n_criteria=args.n_criteria, out_shp=args.output_ar_shapefile, out_csv=args.output_csv, ak_shp=args.ak_shapefile, fp_6hr=args.output_6hr_shapefile, fp_events=args.output_events_shapefile)
-    
-    print(f"Processing complete! Full shapefile output written to {args.output_ar_shapefile}, with companion CSV file written to {args.output_csv}. All Alaska landfall ARs shapefile output written to {args.output_6hr_shapefile}. Condensed Alaska landfall ARs shapefile output written to {args.output_events_shapefile}.")
-    
+    print(
+        f"Using the IVT input {args.input_file} to filter candidate ARs based on {args.n_criteria} criteria."
+    )
+
+    detect_all_ars(
+        fp=args.input_file,
+        n_criteria=args.n_criteria,
+        out_shp=args.output_ar_shapefile,
+        out_csv=args.output_csv,
+        ak_shp=args.ak_shapefile,
+        fp_6hr=args.output_6hr_shapefile,
+        fp_events=args.output_events_shapefile,
+    )
+
+    print(
+        f"Processing complete! Full shapefile output written to {args.output_ar_shapefile}, with companion CSV file written to {args.output_csv}. All Alaska landfall ARs shapefile output written to {args.output_6hr_shapefile}. Condensed Alaska landfall ARs shapefile output written to {args.output_events_shapefile}."
+    )
