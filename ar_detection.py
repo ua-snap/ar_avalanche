@@ -703,6 +703,10 @@ def landfall_ars_export(shp_fp, ak_shp, fp_6hr, fp_events):
     # export raw 6hr geodataframe to shp
     ak_ars.drop(columns=["dt", "index_right", "FEATURE"]).to_file(fp_6hr, index=True)
 
+    # wrap the circular mean function using max 360 arg
+    def circ_mean(x):
+        return circmean(x, high=360)
+
     # label any ARs occuring on adjacent dates with a unique "diff" ID and inspect as a subset dfs
     # use connected components of  a matrix to label the spatially overlapping groups of polygons in each subset df
     # (this allows for separation of multiple non-overlapping AR events occuring in the same time period)
@@ -742,10 +746,10 @@ def landfall_ars_export(shp_fp, ak_shp, fp_6hr, fp_events):
                 "sumrel_str": "sum",
                 "ratio_m": "mean",
                 "len_km_m": "mean",
-                "orient_m": "mean",
+                "orient_m": circ_mean,
                 "poleward_m": "mean",
                 "dircoher_m": "mean",
-                "mean_dir_m": "mean",
+                "mean_dir_m": circ_mean,
             },
         )
 
