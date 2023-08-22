@@ -733,7 +733,9 @@ def landfall_ars_export(shp_fp, csv_fp, ak_shp, landfall_shp, landfall_csv, land
     ak_ars.drop(columns=["dt", "index_right", "FEATURE"]).to_file(landfall_shp, index=True)
     # copy original AR detection csv to the landfall fp (these two outputs have the same exact fields)
     t = pd.read_csv(csv_fp)
-    t.to_csv(landfall_csv)
+    newrow = ["index", "table index value in raw AR detection shapefile"]
+    t.loc[len(t)] = newrow
+    t.to_csv(landfall_csv, index=False)
 
     # wrap the circular mean function using max 360 arg
     def circ_mean(x):
@@ -814,7 +816,7 @@ def landfall_ars_export(shp_fp, csv_fp, ak_shp, landfall_shp, landfall_csv, land
         dfs.append(res)
 
     events = pd.concat(dfs)
-    events = events.reset_index(drop=True).rename(columns={"index": "event_id"})
+    events = events.reset_index(names='event_id')
     events.crs = ars.crs
 
     # reset datetime columns as strings for output (datetime fields not supported in ESRI shp files)
