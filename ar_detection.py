@@ -682,8 +682,7 @@ def create_shapefile(all_ars, shp_fp, csv_fp):
         'Number of criteria passed'
     ]
     csv_dict = dict(zip(new_cols, desc))
-    pd.DataFrame.from_dict(data=csv_dict, orient="index").to_csv(csv_fp, header=['shp_col', 'desc'])
-
+    pd.DataFrame.from_dict(data=csv_dict, orient="index").reset_index().to_csv(csv_fp, header=['shp_col', 'desc'], index=False)
 
 def landfall_ars_export(shp_fp, csv_fp, ak_shp, landfall_shp, landfall_csv, landfall_events_shp, landfall_events_csv):
     """Filter the raw AR detection shapefile output to include only ARs making landfall in Alaska, and export the result to a new shapefile. Process the landfall ARs to condense adjacent dates into event multipolygons, and export the result to a second new shapefile. For both outputs, include a CSV with column names and descriptions.
@@ -846,8 +845,7 @@ def landfall_ars_export(shp_fp, csv_fp, ak_shp, landfall_shp, landfall_csv, land
 
     csv_dict = dict(zip(cols, desc))
     # export event AR column description table to csv
-    pd.DataFrame.from_dict(data=csv_dict, orient="index").to_csv(landfall_events_csv, header=['shp_col', 'desc'])
-
+    pd.DataFrame.from_dict(data=csv_dict, orient="index").reset_index().to_csv(landfall_events_csv, header=['shp_col', 'desc'], index=False)
 
 def detect_all_ars(fp, n_criteria, out_shp, out_csv, ak_shp, landfall_shp, landfall_csv, landfall_events_shp, landfall_events_csv):
     """Run the entire AR detection pipeline and generate shapefile output.
