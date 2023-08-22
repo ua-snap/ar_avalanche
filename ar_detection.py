@@ -849,7 +849,7 @@ def landfall_ars_export(shp_fp, csv_fp, ak_shp, landfall_shp, landfall_csv, land
     pd.DataFrame.from_dict(data=csv_dict, orient="index").to_csv(landfall_events_csv, header=['shp_col', 'desc'])
 
 
-def detect_all_ars(fp, n_criteria, out_shp, out_csv, ak_shp, fp_6hr, fp_events):
+def detect_all_ars(fp, n_criteria, out_shp, out_csv, ak_shp, landfall_shp, landfall_csv, landfall_events_shp, landfall_events_csv):
     """Run the entire AR detection pipeline and generate shapefile output.
 
     Parameters
@@ -864,6 +864,14 @@ def detect_all_ars(fp, n_criteria, out_shp, out_csv, ak_shp, fp_6hr, fp_events):
         File path to save the csv output.
     ak_shp : Posix Path
         File path of Alaska coastline shapefile input.
+    landfall_shp : PosixPath
+        File path for the landfalling AR shapefile output.
+    landfall_csv : PosixPath
+        File path for the landfalling AR csv output.
+    landfall_events_shp : PosixPath
+        File path for the condensed landfall AR events shapefile output.
+    landfall_events_csv : PosixPath
+        File path for the landfalling AR events csv output.
 
     Returns
     -------
@@ -883,7 +891,7 @@ def detect_all_ars(fp, n_criteria, out_shp, out_csv, ak_shp, fp_6hr, fp_events):
             output_ars, ar_di, labeled_regions, ivt_ds
         )
         create_shapefile(output_ar_gdf, out_shp, out_csv)
-        landfall_ars_export(out_shp, ak_shp, fp_6hr, fp_events)
+        landfall_ars_export(out_shp, out_csv, ak_shp, landfall_shp, landfall_csv, landfall_events_shp, landfall_events_csv)
 
 
 if __name__ == "__main__":
@@ -923,16 +931,28 @@ if __name__ == "__main__":
         help="File path of AK shapefile input.",
     )
     parser.add_argument(
-        "--output_6hr_shapefile",
+        "--output_landfall_shapefile",
         type=str,
-        default=landfall_6hr_fp,
-        help="File path to save the 6hr landfall AR shapefile output.",
+        default=landfall_shp,
+        help="File path to save the landfall AR shapefile output.",
+    )
+    parser.add_argument(
+        "--output_landfall_csv",
+        type=str,
+        default=landfall_csv,
+        help="File path to save the landfall AR csv output.",
     )
     parser.add_argument(
         "--output_events_shapefile",
         type=str,
-        default=landfall_events_fp,
+        default=landfall_events_shp,
         help="File path to save landfall AR events shapefile output.",
+    )
+    parser.add_argument(
+        "--output_events_csv",
+        type=str,
+        default=landfall_events_csv,
+        help="File path to save landfall AR events csv output.",
     )
 
     args = parser.parse_args()
@@ -947,10 +967,12 @@ if __name__ == "__main__":
         out_shp=args.output_ar_shapefile,
         out_csv=args.output_csv,
         ak_shp=args.ak_shapefile,
-        fp_6hr=args.output_6hr_shapefile,
-        fp_events=args.output_events_shapefile,
+        landfall_shp=args.output_landfall_shapefile,
+        landfall_csv=args.output_landfall_csv,
+        landfall_events_shp=args.output_events_shapefile,
+        landfall_events_csv=args.output_events_csv
     )
 
     print(
-        f"Processing complete! Full shapefile output written to {args.output_ar_shapefile}, with companion CSV file written to {args.output_csv}. All Alaska landfall ARs shapefile output written to {args.output_6hr_shapefile}. Condensed Alaska landfall ARs shapefile output written to {args.output_events_shapefile}."
+        f"Processing complete! Full shapefile output written to {args.output_ar_shapefile}, with companion CSV file written to {args.output_csv}. All Alaska landfall ARs shapefile output written to {args.output_landfall_shapefile}, with companion CSV file written to {args.output_landfall_csv}. Condensed Alaska landfall ARs shapefile output written to {args.output_events_shapefile}, with companion CSV file written to {args.output_events_csv}."
     )
