@@ -751,7 +751,7 @@ def landfall_ars_export(shp_fp, csv_fp, ak_shp, landfall_shp, landfall_csv, land
     dfs = []
 
     for d in ak_ars["diff"].unique():
-        sub = ak_ars[ak_ars["diff"] == d].drop(columns='index').copy()
+        sub = ak_ars[ak_ars["diff"] == d].copy()
 
         # spatial overlap analysis of adjacent date subset
         overlap_matrix = sub.geometry.apply(
@@ -824,12 +824,13 @@ def landfall_ars_export(shp_fp, csv_fp, ak_shp, landfall_shp, landfall_csv, land
     events["end"] = events["end"].astype(str)
 
     # export condensed event AR geodataframe to shp
-    events.to_file(landfall_events_shp, index=True)
+    events.to_file(landfall_events_shp, index=False)
 
     # set up AR events columns decription table
     cols = events.columns.to_list()
     desc = [
         'unique AR event ID',
+        'geometry string for AR event polygons',
         'first timestep of AR event',
         'last timestep of AR event',
         'sum of IVT across all timestep ARs in event',
@@ -842,8 +843,7 @@ def landfall_ars_export(shp_fp, csv_fp, ak_shp, landfall_shp, landfall_csv, land
         'mean IVT direction across all timestep ARs in event',
         'duration of AR event',
         'sum of AR event total intensity divided by AR event duration',
-        'sum of AR event relative intensity divided by AR event duration',
-        'geometry string for AR event polygons'
+        'sum of AR event relative intensity divided by AR event duration'
         ]
 
     csv_dict = dict(zip(cols, desc))
