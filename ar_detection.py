@@ -676,7 +676,7 @@ def create_shapefile(all_ars, shp_fp, csv_fp):
         'sum of relative IVT (sum IVT/area) within timestep AR',
         'Coherence in IVT direction (1 = True / 0 = False)',
         'Mean Meridional IVT (1 = True / 0 = False)',
-        'Consistency Between Mean IVT Direction and Overall Orientation',
+        'Consistency Between Mean IVT Direction and Overall Orientation (1 = True / 0 = False)',
         'Length (1 = True / 0 = False)',
         'Length/Width Ratio (1 = True / 0 = False)',
         'Number of criteria passed'
@@ -751,7 +751,7 @@ def landfall_ars_export(shp_fp, csv_fp, ak_shp, landfall_shp, landfall_csv, land
     dfs = []
 
     for d in ak_ars["diff"].unique():
-        sub = ak_ars[ak_ars["diff"] == d].copy()
+        sub = ak_ars[ak_ars["diff"] == d].drop(columns='index').copy()
 
         # spatial overlap analysis of adjacent date subset
         overlap_matrix = sub.geometry.apply(
@@ -829,6 +829,7 @@ def landfall_ars_export(shp_fp, csv_fp, ak_shp, landfall_shp, landfall_csv, land
     # set up AR events columns decription table
     cols = events.columns.to_list()
     desc = [
+        'unique AR event ID',
         'first timestep of AR event',
         'last timestep of AR event',
         'sum of IVT across all timestep ARs in event',
