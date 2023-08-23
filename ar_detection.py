@@ -816,7 +816,7 @@ def landfall_ars_export(shp_fp, csv_fp, ak_shp, landfall_shp, landfall_csv, land
         dfs.append(res)
 
     events = pd.concat(dfs)
-    events = events.reset_index(names='event_id')
+    events = events.reset_index(drop=True).reset_index(names='event_id')
     events.crs = ars.crs
 
     # reset datetime columns as strings for output (datetime fields not supported in ESRI shp files)

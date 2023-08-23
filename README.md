@@ -24,7 +24,7 @@ The overall orientation of the object (i.e., the direction of the shape elongati
  - All download specifications and model parameters are defined in `config.py`.
  - The `download.py` script will download the necessary ERA5 input data.
  - The `compute_ivt.py` script will transform the downloaded ERA5 input data into a datacube with the additional variables of IVT magnitude, direction, and an IVT quantile value.
- - The `ar_detection.py` module contains a collection of AR detection functions that will filter AR candidates based on the criteria and create shapefile outputs of objects classified as ARs. These functions may be orchestrated from a notebook (see `AR_detection.ipynb` and `AR_full_pipeline.ipynb`) or ran as a script. 
+ - The `ar_detection.py` module contains a collection of AR detection functions that will filter AR candidates based on the criteria and create shapefile outputs of objects classified as ARs. These functions may be orchestrated from a notebook (see `AR_detection.ipynb`) or ran as a script. 
 
 ## Usage
 1. Register for a Climate Data Store (CDS) account and install the CDS API client according to the instructions [here].(https://cds.climate.copernicus.eu/api-how-to). Be sure to accept the user agreement. 
@@ -33,4 +33,6 @@ The overall orientation of the object (i.e., the direction of the shape elongati
 5. Review parameters in `config.py` and adjust if desired. Note that there is a download request limit of 120,000 items, so adjusting the timestep or date range may overload the request and break the script.
 6. Execute `download.py`
 7. Execute `compute_ivt.py`
-8. Execute `ar_detection.py`, or use either `AR_detection.ipynb` or `AR_full_pipeline.ipynb` to orchestrate the detection.
+8. Execute `ar_detection.py` or use `AR_detection.ipynb` to orchestrate the detection.
+9. Examine the results using the `AR_QC.ipynb` notebook.
+10. Explore spatiotemporal relationships between avalanches and AR events using the `AR_avalanche_exploration.ipynb` notebook.
