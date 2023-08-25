@@ -27,7 +27,7 @@ from config import (
     landfall_shp,
     landfall_csv,
     landfall_events_shp,
-    landfall_events_csv
+    landfall_events_csv,
 )
 
 
@@ -658,33 +658,44 @@ def create_shapefile(all_ars, shp_fp, csv_fp):
     ]
     col_dict = dict(zip(old_cols, new_cols))
     all_ars.rename(columns=col_dict, inplace=True)
-    #export shp
+    # export shp
     all_ars.to_file(shp_fp)
 
-    #set up col descriptions for csv export
+    # set up col descriptions for csv export
     desc = [
-        'timestep of AR',
-        'original candidate region label of timestep AR',
-        'geometry string for AR polygon',
-        'length to width ratio of timestep AR',
-        'length (km) of timestep AR',
-        'orientation of timestep AR',
-        'poleward strength of timestep AR',
-        'directional coherence (%) of timestep AR',
-        'mean IVT direction of timestep AR',
-        'sum of IVT within timestep AR',
-        'sum of relative IVT (sum IVT/area) within timestep AR',
-        'Coherence in IVT direction (1 = True / 0 = False)',
-        'Mean Meridional IVT (1 = True / 0 = False)',
-        'Consistency Between Mean IVT Direction and Overall Orientation (1 = True / 0 = False)',
-        'Length (1 = True / 0 = False)',
-        'Length/Width Ratio (1 = True / 0 = False)',
-        'Number of criteria passed'
+        "timestep of AR",
+        "original candidate region label of timestep AR",
+        "geometry string for AR polygon",
+        "length to width ratio of timestep AR",
+        "length (km) of timestep AR",
+        "orientation of timestep AR",
+        "poleward strength of timestep AR",
+        "directional coherence (%) of timestep AR",
+        "mean IVT direction of timestep AR",
+        "sum of IVT within timestep AR",
+        "sum of relative IVT (sum IVT/area) within timestep AR",
+        "Coherence in IVT direction (1 = True / 0 = False)",
+        "Mean Meridional IVT (1 = True / 0 = False)",
+        "Consistency Between Mean IVT Direction and Overall Orientation (1 = True / 0 = False)",
+        "Length (1 = True / 0 = False)",
+        "Length/Width Ratio (1 = True / 0 = False)",
+        "Number of criteria passed",
     ]
     csv_dict = dict(zip(new_cols, desc))
-    pd.DataFrame.from_dict(data=csv_dict, orient="index").reset_index().to_csv(csv_fp, header=['shp_col', 'desc'], index=False)
+    pd.DataFrame.from_dict(data=csv_dict, orient="index").reset_index().to_csv(
+        csv_fp, header=["shp_col", "desc"], index=False
+    )
 
-def landfall_ars_export(shp_fp, csv_fp, ak_shp, landfall_shp, landfall_csv, landfall_events_shp, landfall_events_csv):
+
+def landfall_ars_export(
+    shp_fp,
+    csv_fp,
+    ak_shp,
+    landfall_shp,
+    landfall_csv,
+    landfall_events_shp,
+    landfall_events_csv,
+):
     """Filter the raw AR detection shapefile output to include only ARs making landfall in Alaska, and export the result to a new shapefile. Process the landfall ARs to condense adjacent dates into event multipolygons, and export the result to a second new shapefile. For both outputs, include a CSV with column names and descriptions.
 
     Parameters
@@ -692,7 +703,7 @@ def landfall_ars_export(shp_fp, csv_fp, ak_shp, landfall_shp, landfall_csv, land
     shp_fp : PosixPath
         File path to the raw AR detection shapefile input.
     csv_fp : PosixPath
-        File path to the raw AR detection csv input.   
+        File path to the raw AR detection csv input.
     ak_shp : PosixPath
         File path to the Alaska coastline shapefile input.
     landfall_shp : PosixPath
@@ -703,7 +714,7 @@ def landfall_ars_export(shp_fp, csv_fp, ak_shp, landfall_shp, landfall_csv, land
         File path for the condensed landfall AR events shapefile output.
     landfall_events_csv : PosixPath
         File path for the landfalling AR events csv output.
-        
+
 
     Returns
     -------
@@ -730,7 +741,9 @@ def landfall_ars_export(shp_fp, csv_fp, ak_shp, landfall_shp, landfall_csv, land
     ak_ars = ars.sjoin(ak_d, how="inner", predicate="intersects")
 
     # export landfall geodataframe to shp
-    ak_ars.drop(columns=["dt", "index_right", "FEATURE"]).to_file(landfall_shp, index=True)
+    ak_ars.drop(columns=["dt", "index_right", "FEATURE"]).to_file(
+        landfall_shp, index=True
+    )
     # copy original AR detection csv to the landfall fp (these two outputs have the same exact fields)
     t = pd.read_csv(csv_fp)
     newrow = ["index", "table index value in raw AR detection shapefile"]
@@ -816,7 +829,7 @@ def landfall_ars_export(shp_fp, csv_fp, ak_shp, landfall_shp, landfall_csv, land
         dfs.append(res)
 
     events = pd.concat(dfs)
-    events = events.reset_index(drop=True).reset_index(names='event_id')
+    events = events.reset_index(drop=True).reset_index(names="event_id")
     events.crs = ars.crs
 
     # reset datetime columns as strings for output (datetime fields not supported in ESRI shp files)
@@ -829,28 +842,41 @@ def landfall_ars_export(shp_fp, csv_fp, ak_shp, landfall_shp, landfall_csv, land
     # set up AR events columns decription table
     cols = events.columns.to_list()
     desc = [
-        'unique AR event ID',
-        'geometry string for AR event polygons',
-        'first timestep of AR event',
-        'last timestep of AR event',
-        'sum of IVT across all timestep ARs in event',
-        'sum of relative IVT (sum IVT/area) across all timestep ARs in event',
-        'mean length to width ratio across all timestep ARs in event',
-        'mean length (km) across all timestep ARs in event',
-        'mean orientation across all timestep ARs in event',
-        'mean poleward strength across all timestep ARs in event',
-        'mean directional coherence (%) across all timestep ARs in event',
-        'mean IVT direction across all timestep ARs in event',
-        'duration of AR event',
-        'sum of AR event total intensity divided by AR event duration',
-        'sum of AR event relative intensity divided by AR event duration'
-        ]
+        "unique AR event ID",
+        "geometry string for AR event polygons",
+        "first timestep of AR event",
+        "last timestep of AR event",
+        "sum of IVT across all timestep ARs in event",
+        "sum of relative IVT (sum IVT/area) across all timestep ARs in event",
+        "mean length to width ratio across all timestep ARs in event",
+        "mean length (km) across all timestep ARs in event",
+        "mean orientation across all timestep ARs in event",
+        "mean poleward strength across all timestep ARs in event",
+        "mean directional coherence (%) across all timestep ARs in event",
+        "mean IVT direction across all timestep ARs in event",
+        "duration of AR event",
+        "sum of AR event total intensity divided by AR event duration",
+        "sum of AR event relative intensity divided by AR event duration",
+    ]
 
     csv_dict = dict(zip(cols, desc))
     # export event AR column description table to csv
-    pd.DataFrame.from_dict(data=csv_dict, orient="index").reset_index().to_csv(landfall_events_csv, header=['shp_col', 'desc'], index=False)
+    pd.DataFrame.from_dict(data=csv_dict, orient="index").reset_index().to_csv(
+        landfall_events_csv, header=["shp_col", "desc"], index=False
+    )
 
-def detect_all_ars(fp, n_criteria, out_shp, out_csv, ak_shp, landfall_shp, landfall_csv, landfall_events_shp, landfall_events_csv):
+
+def detect_all_ars(
+    fp,
+    n_criteria,
+    out_shp,
+    out_csv,
+    ak_shp,
+    landfall_shp,
+    landfall_csv,
+    landfall_events_shp,
+    landfall_events_csv,
+):
     """Run the entire AR detection pipeline and generate shapefile output.
 
     Parameters
@@ -892,7 +918,15 @@ def detect_all_ars(fp, n_criteria, out_shp, out_csv, ak_shp, landfall_shp, landf
             output_ars, ar_di, labeled_regions, ivt_ds
         )
         create_shapefile(output_ar_gdf, out_shp, out_csv)
-        landfall_ars_export(out_shp, out_csv, ak_shp, landfall_shp, landfall_csv, landfall_events_shp, landfall_events_csv)
+        landfall_ars_export(
+            out_shp,
+            out_csv,
+            ak_shp,
+            landfall_shp,
+            landfall_csv,
+            landfall_events_shp,
+            landfall_events_csv,
+        )
 
 
 if __name__ == "__main__":
@@ -971,7 +1005,7 @@ if __name__ == "__main__":
         landfall_shp=args.output_landfall_shapefile,
         landfall_csv=args.output_landfall_csv,
         landfall_events_shp=args.output_events_shapefile,
-        landfall_events_csv=args.output_events_csv
+        landfall_events_csv=args.output_events_csv,
     )
 
     print(
