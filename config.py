@@ -51,6 +51,9 @@ log_fp = OUTPUT_DIR.joinpath("log.csv")
 # path to Alaska coastline shapefile (included in Github repo tree)
 ak_shp = Path("./shp/Alaska_Coast_Simplified_Polygon.shp")
 
+# path to Canada coastline shapefile (included in Github repo tree)
+ca_shp = Path("./shp/gpr_000b11a_e.shp")
+
 # path to Alaska point location table (included in Github repo tree)
 ak_pts = Path("./tbl/alaska_point_locations.csv")
 

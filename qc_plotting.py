@@ -9,7 +9,7 @@ from shapely.geometry import Polygon
 import math
 import numpy as np
 
-from config import start_year, end_year, bbox
+from config import start_year, end_year, bbox, ak_shp, ca_shp
 
 
 def attr_check(shp, tbl):
@@ -79,15 +79,13 @@ def count_ars(raw, landfall, events, points):
     print("On average, we detected " + str(len(p)/30) + " yearly AR events with a coastal impact points.")
 
 
-def create_hexgrid(ak, gdf, side_length):
+def create_hexgrid(gdf, side_length):
     """Create a hexagon grid to aggregate AR events points in space. Adapted from https://pygis.io/docs/e_summarize_vector.html.
 
     Parameters
     ----------
-    ak : geodataframe
-        geodataframe of Alaska boundary; must have a projected CRS
     gdf : geodataframe
-        geodataframe of events layer; must have a projected CRS
+        geodataframe of events layer; must be in EPSG:3338
     side length : integer
         length of a hexagon side, in meters
 
@@ -95,11 +93,15 @@ def create_hexgrid(ak, gdf, side_length):
     -------
     Hexgrid geodataframe with unique integer grid IDs for spatial joining operations.
     """
+    ak = gpd.read_file(ak_shp)
+    ca = gpd.read_file(ca_shp).to_crs(ak.crs)
+    ak_ca = pd.concat([ak, ca])
+
 
     # get extents
     min_x1, min_y1, max_x1, max_y1 = gdf.total_bounds
-    min_x2, min_y2, max_x2, max_y2 = ak.total_bounds
-    # find extent of both layers combined
+    min_x2, min_y2, max_x2, max_y2 = ak_ca.total_bounds
+    # find extent of AK / Canada / ARs combined
     min_x = min(min_x1, min_x2)
     min_y = min(min_y1, min_y2)
     max_x = max(max_x1, max_x2)
@@ -201,15 +203,13 @@ def agg_by_hexgrid_cells_and_year_month(hexgrid, hexid, gdf, prop, agg, allow_na
     return hexgrid_, pt, prop
 
 
-def plot_3panel_heatmaps(pt, ak, hexdf_full, hexdf_coast, prop, cmap, title, cbar_labels, dev, phenom, phenom_string):
+def plot_3panel_heatmaps(pt, hexdf_full, hexdf_coast, prop, cmap, title, cbar_labels, dev, phenom, phenom_string):
     """Plots a 3-panel figure of heatmaps using aggregated hexgrid and pivot table outputs. Includes a year/month heatmap, polygon centroid heatmap, and coastal intersection heatmap. Optionally, include atmospheric phenomenon data.
 
     Parameters
     ----------
     pt : dataframe
         Year/Month pivot table with aggregated values for each unique year/month combo.
-    ak : geodataframe
-        Alaska polygon geodataframe, should match CRS of hexgrid geodataframe inputs.
     hexdf_full : geodataframe
         Hexgrid geodataframe with aggregated values for each unique grid cell; based on polygon centroid geometry.
     hexdf_coast : geodataframe
@@ -231,6 +231,10 @@ def plot_3panel_heatmaps(pt, ak, hexdf_full, hexdf_coast, prop, cmap, title, cba
     -------
     A 3 panel heatmap figure.
     """
+    #import ak shp (in 3338) and ca shp (as 3338)
+    ak = gpd.read_file(ak_shp)
+    ca = gpd.read_file(ca_shp).to_crs(ak.crs)
+
     #figure setup
     fig = plt.figure(figsize=(10,9))
     grid = plt.GridSpec(2, 2, wspace=0.05, hspace=-0.35, height_ratios=[1, 2.5], width_ratios=[1,1.57]) 
@@ -263,20 +267,24 @@ def plot_3panel_heatmaps(pt, ak, hexdf_full, hexdf_coast, prop, cmap, title, cba
         sns.heatmap(pt, fmt='', ax=heatmap_ax, cmap=cmap, cbar=False, vmax=pt_vmax, vmin=pt_vmin, alpha=a)
 
     ak.geometry.boundary.plot(ax=full_ax, color='black', zorder=1)
+    ca.geometry.boundary.plot(ax=full_ax, color='black', zorder=1)
+
     if dev==True:
         hexdf_full.plot(ax=full_ax, column=prop, cmap=cmap, norm=fulldivnorm, legend=False, edgecolor='lightgray', linewidth = 0.5, alpha = a, zorder=2)
     else:
         hexdf_full.plot(ax=full_ax, column=prop, cmap=cmap, vmin=0, vmax=full_vmax, legend=False, edgecolor='lightgray', linewidth = 0.5, alpha = a, zorder=2)
     full_ax.set_xlim([-2250000, 2150000])
-    full_ax.set_ylim([-1500000, 2600000])
+    full_ax.set_ylim([-1500000, 2500000])
 
     ak.geometry.boundary.plot(ax=coast_ax, color='black', zorder=1)
+    ca.geometry.boundary.plot(ax=coast_ax, color='black', zorder=1)
+
     if dev==True:
         hexdf_coast.plot(ax=coast_ax, column=prop, cmap=cmap, norm=coastdivnorm, legend = False, edgecolor='lightgray', linewidth = 0.5, alpha = a, zorder=2)
     else:
         hexdf_coast.plot(ax=coast_ax, column=prop, cmap=cmap, vmin=0, vmax=coast_vmax, legend = False, edgecolor='lightgray', linewidth = 0.5, alpha = a, zorder=2)
     coast_ax.set_xlim([-2250000, 2150000])
-    coast_ax.set_ylim([0, 2600000])
+    coast_ax.set_ylim([0, 2500000])
 
     #formatting axes text
     heatmap_ax.set(xlabel=None, ylabel=None)
