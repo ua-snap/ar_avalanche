@@ -1,7 +1,7 @@
 # Atmospheric Rivers and Avalanches
 
 ## Background
-This codebase will download [ERA5 6 hourly pressure level data](https://cds.climate.copernicus.eu/cdsapp#!/dataset/reanalysis-era5-pressure-levels?tab=overview) from 1993-2023 in the vicinity of SE Alaska and apply an atmospheric river (AR) detection algorithm. Outputs will include a datacube of AR objects and multiple attributed shapefiles for future work correlating avalanche events to ARs. 
+This codebase will download [ERA5 6 hourly pressure level data](https://cds.climate.copernicus.eu/cdsapp#!/dataset/reanalysis-era5-pressure-levels?tab=overview) in the vicinity of Alaska and apply an atmospheric river (AR) detection algorithm. Outputs will include a datacube of AR objects and multiple attributed shapefiles for future work correlating avalanche events to ARs. 
 
 The AR detection algorithm used here is adapted from [Guan & Waliser (2015)](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1002/2015JD024257) and uses a combination of vertically integrated water vapor transport (IVT), geometric shape, and directional criteria to define ARs. See the annotated bibilography document for more detail and other references. Users of this codebase should know the following information about atmospheric river criteria:
 
