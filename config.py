@@ -39,6 +39,15 @@ landfall_events_shp = OUTPUT_DIR.joinpath("landfall_ar_events.shp")
 # path for landfall AR events results column name crosswalk csv
 landfall_events_csv = OUTPUT_DIR.joinpath("landfall_ar_events.csv")
 
+# path for AR event coastal impact results shapefile
+coastal_impact_shp = OUTPUT_DIR.joinpath("landfall_ar_events_coastal_impact.shp")
+
+# path for AR event coastal impact results column name crosswalk csv
+coastal_impact_csv = OUTPUT_DIR.joinpath("landfall_ar_events_coastal_impact.csv")
+
+# path for log CSV
+log_fp = OUTPUT_DIR.joinpath("log.csv")
+
 # path to Alaska coastline shapefile (included in Github repo tree)
 ak_shp = Path("./shp/Alaska_Coast_Simplified_Polygon.shp")
 
@@ -47,6 +56,12 @@ ak_pts = Path("./tbl/alaska_point_locations.csv")
 
 # path to revised avalanche database (included in Github repo tree)
 avy_db = Path("./tbl/avy_db_rev.csv")
+
+# path to ENSO table (included in Github repo tree)
+enso_csv = Path("./tbl/enso_1980-2021.csv")
+
+# path to ENSO table (included in Github repo tree)
+pdo_csv = Path("./tbl/pdo_1980-2021.csv")
 
 # ERA5 download parameters
 dataset = "reanalysis-era5-single-levels"
@@ -91,7 +106,7 @@ ar_params = {
     # days before/after to compute IVT percentile (e.g., 75 before and 75 after for a ~5-month window
     "window": 75,
     # threshold percentile to identify high IVT instances
-    "ivt_percentile": 85,
+    "ivt_percentile": 90,
     # secondary IVT criteria for identifying ARs in polar low moisture areas; units are kg m**−1 s**−1 (same as IVT)
     "ivt_floor": 100,
     # criteria for directional coherence; compare this value against mean IVT direction; units are degrees

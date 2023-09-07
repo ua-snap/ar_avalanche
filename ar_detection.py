@@ -6,19 +6,20 @@ import numpy as np
 import pyproj
 import geopandas as gpd
 import pandas as pd
-import shapely
 from tqdm import tqdm
 from scipy.ndimage import label, generate_binary_structure
 from skimage.measure import regionprops
 from scipy.stats import circmean
 from scipy.sparse.csgraph import connected_components
 from haversine import haversine
-from shapely.geometry import shape
+from shapely.geometry import shape, Point, LineString
 from rasterio.features import shapes
 from datetime import datetime
 
-
 from config import (
+    start_year,
+    end_year,
+    bbox,
     ar_params,
     ard_fp,
     shp_fp,
@@ -28,6 +29,9 @@ from config import (
     landfall_csv,
     landfall_events_shp,
     landfall_events_csv,
+    coastal_impact_shp,
+    coastal_impact_csv,
+    log_fp
 )
 
 
@@ -695,6 +699,8 @@ def landfall_ars_export(
     landfall_csv,
     landfall_events_shp,
     landfall_events_csv,
+    coastal_impact_shp,
+    coastal_impact_csv
 ):
     """Filter the raw AR detection shapefile output to include only ARs making landfall in Alaska, and export the result to a new shapefile. Process the landfall ARs to condense adjacent dates into event multipolygons, and export the result to a second new shapefile. For both outputs, include a CSV with column names and descriptions.
 
@@ -711,9 +717,13 @@ def landfall_ars_export(
     landfall_csv : PosixPath
         File path for the landfalling AR csv output.
     landfall_events_shp : PosixPath
-        File path for the condensed landfall AR events shapefile output.
+        File path for the condensed landfalling AR events shapefile output.
     landfall_events_csv : PosixPath
         File path for the landfalling AR events csv output.
+    coastal_impact_shp : PosixPath
+        File path for the landfalling AR events coastal impact shapefile output.
+    coastal_impact_csv : PosixPath
+        File path for the landfalling AR events coastal impact csv output.
 
 
     Returns
@@ -737,6 +747,7 @@ def landfall_ars_export(
     ]
     ars["time"] = ars["dt"].astype(str)
 
+    #### FIND LANDFALLING ARS:
     # perform spatial join, keeping only AR polygons that intersect with the AK polygon
     ak_ars = ars.sjoin(ak_d, how="inner", predicate="intersects")
 
@@ -754,6 +765,7 @@ def landfall_ars_export(
     def circ_mean(x):
         return circmean(x, high=360)
 
+    #### AGGREGATE LANDFALLING AR EVENTS:
     # label any ARs occuring on adjacent dates with a unique "diff" ID and inspect as a subset dfs
     # use connected components of  a matrix to label the spatially overlapping groups of polygons in each subset df
     # (this allows for separation of multiple non-overlapping AR events occuring in the same time period)
@@ -865,6 +877,124 @@ def landfall_ars_export(
         landfall_events_csv, header=["shp_col", "desc"], index=False
     )
 
+    del(cols, desc, csv_dict)
+
+    #### FIND COASTAL IMPACT POINTS FROM AR IVT AXIS LINE / AK COASTLINE INTERSECTION:
+    #create simple line to represent southern AK coast boundary, extended to Seattle capture Canadian coastline
+    lonlats = {173:52.5, 178.5:51.5, -176:52, -173:52, -164:54, -153:57, -151:59, -147:60, -141:60, -137:58, -133:55, -131:52, -125:48}
+    df = pd.DataFrame.from_dict(lonlats, orient='index').reset_index().rename(columns={'index':'X', 0:'Y'})
+    #zip the coords into a point object and convert to gdf
+    geometry = [Point(xy) for xy in zip(df.X, df.Y)]
+    geo_df = gpd.GeoDataFrame(df, geometry=geometry)
+    geo_df['id'] = 'ak_coast'
+    #use the points in order to create a linestring
+    geo_df2 = geo_df.groupby('id')['geometry'].apply(lambda x: LineString(x.tolist()))
+    #convert to geodataframe and add CRS, then convert CRS to 3338; the planar projection is required here to handle coastline overlapping the meridian!
+    ak_coast = gpd.GeoDataFrame(geo_df2, geometry='geometry', crs=events.crs)
+    ak_coast = ak_coast.to_crs('epsg:3338')
+
+    #copy events to new gdf, resetting geomtery to centroid
+    #round-trip thru 3338 to use planar centroid (more accurate)
+    e = events.copy()
+    e['geom_cent'] = e.to_crs('epsg:3338').geometry.centroid.to_crs(e.crs)
+    e = e.set_geometry('geom_cent')
+    e.drop('geometry', axis=1, inplace=True)
+
+    #create new standalone x/y columns for zipping
+    e['xo'], e['yo'] = e.geom_cent.x, e.geom_cent.y
+
+    #set distance for axis line extension from centroid (m)
+    dist = 3000000
+
+    #get mean direction of IVT
+    o = e.mean_dir_m
+    #or option to use mean orientation of shape
+    #o = e.orient_m
+
+    #create geoid for great circle distance
+    #compute endpoints using forward azimuth and distance, and write to new gdf columns
+    g = pyproj.Geod(ellps='WGS84')
+    f = [g.fwd(xo, yo, o, dist) for xo, yo, o in zip(e.xo, e.yo, o)]
+    e['x1'] = [lon[0] for lon in f]
+    e['y1'] = [lat[1] for lat in f]
+    #compute WGS84 endpoints using backward azimuth and distance, and write to new gdf columns
+    b = [g.fwd(xo, yo, o, dist) for xo, yo, o in zip(e.xo, e.yo, ((o - 180) % 360))]
+    e['x2'] = [lon[0] for lon in b]
+    e['y2'] = [lat[1] for lat in b]
+    #create line feature running between endpoints and thru centroid 
+    e['geom_line'] = [LineString([[x1, y1], [xo, yo], [x2, y2]]) for x1, y1, xo, yo, x2, y2 in zip(e.x1, e.y1, e.xo, e.yo, e.x2, e.y2)]
+    #create a new gdf and set line feature as geometry, then convert to 3338 for intersection function
+    line_gdf = gpd.GeoDataFrame(e, geometry='geom_line', crs='epsg:4326')
+    line_gdf = line_gdf.to_crs('epsg:3338')
+
+    pt_dfs = []
+
+    for index, row in line_gdf.iterrows():
+        #get row event id
+        i = row['event_id']
+        #get GeoSeries of intersections of row AK coast 
+        r = line_gdf.iloc[index]['geom_line'].intersection(ak_coast)
+        #keep only points and convert to a gdf, default 'geometry' column is created by gdf.intersection()
+        rpts_gdf = gpd.GeoDataFrame(r[r.geom_type == 'Point'])
+        rpts_gdf.set_geometry(col='geometry', crs=line_gdf.crs, inplace=True)
+        #add event id and merge with original axis line gdf attributes, and add result to list of dataframes
+        rpts_gdf['event_id'] = i
+        rpts_gdf = rpts_gdf.merge(line_gdf, how='left', left_on='event_id', right_on='event_id')
+        pt_dfs.append(rpts_gdf)
+
+    #concatenate event id point intersections and convert back to 4326 for export
+    gdf_ak_int = pd.concat(pt_dfs)
+    gdf_ak_int = gdf_ak_int.to_crs('epsg:4326')
+    #drop all columns except event id and intersection point geometry
+    gdf_ak_int = gdf_ak_int[['event_id', 'geometry']]
+    # export coastal intersection point geodataframe to shp
+    gdf_ak_int.to_file(coastal_impact_shp, index=False)
+    # set up AR events columns decription table
+    cols = gdf_ak_int.columns.to_list()
+    desc = [
+        "unique AR event ID",
+        "geometry string for AR event coastal intersection point"]
+    csv_dict = dict(zip(cols, desc))
+    # export event AR column description table to csv
+    pd.DataFrame.from_dict(data=csv_dict, orient="index").reset_index().to_csv(
+        coastal_impact_csv, header=["shp_col", "desc"], index=False
+    )
+
+
+def create_log(start_year, end_year, bbox, ar_params, log_fp):
+    """
+    Save a CSV log file to disk containing basic info from the config file. This will be saved alongside the shapefile and CSV output.
+
+    Parameters
+    ----------
+    start_year : integer
+        start year of ERA 5 data download
+    end_year : integer
+        end year of ERA 5 data download
+    bbox : list
+        list of lat lons defining ERA 5 download ([lower left y, lower left x, upper right y, upper right x])
+    ar_params : dictionary
+        dictionary of atmospheric river detection parameters
+    log_fp : Posix path
+        path for log CSV output
+
+    Returns
+    -------
+    None
+    """
+    now = datetime.now()
+    d = {'processing_date_time' : str(now),
+        'start year' : start_year,
+        'end year' : end_year,
+        'lon_1' : bbox[1],
+        'lon_2' : bbox[3],
+        'lat_1' : bbox[0],
+        'lat_2' : bbox[2]
+        }
+    d.update(ar_params)
+    df = pd.DataFrame.from_dict(d, orient='index').reset_index().rename(columns={'index':'config_property', 0:'value'})
+    df.to_csv(log_fp, index=False)
+
 
 def detect_all_ars(
     fp,
@@ -876,6 +1006,9 @@ def detect_all_ars(
     landfall_csv,
     landfall_events_shp,
     landfall_events_csv,
+    coastal_impact_shp,
+    coastal_impact_csv,
+    log_fp
 ):
     """Run the entire AR detection pipeline and generate shapefile output.
 
@@ -896,9 +1029,15 @@ def detect_all_ars(
     landfall_csv : PosixPath
         File path for the landfalling AR csv output.
     landfall_events_shp : PosixPath
-        File path for the condensed landfall AR events shapefile output.
+        File path for the condensed landfalling AR events shapefile output.
     landfall_events_csv : PosixPath
         File path for the landfalling AR events csv output.
+    coastal_impact_shp : PosixPath
+        File path for the landfalling AR events coastal impact shapefile output.
+    coastal_impact_csv : PosixPath
+        File path for the landfalling AR events coastal impact csv output.
+    log_fp : PosixPath
+        File path for the processing log CSV file.
 
     Returns
     -------
@@ -926,7 +1065,10 @@ def detect_all_ars(
             landfall_csv,
             landfall_events_shp,
             landfall_events_csv,
+            coastal_impact_shp,
+            coastal_impact_csv
         )
+        create_log(start_year, end_year, bbox, ar_params, log_fp)
 
 
 if __name__ == "__main__":
@@ -989,6 +1131,24 @@ if __name__ == "__main__":
         default=landfall_events_csv,
         help="File path to save landfall AR events csv output.",
     )
+    parser.add_argument(
+        "--output_coastal_shapefile",
+        type=str,
+        default=coastal_impact_shp,
+        help="File path to save landfall AR events coastal impact shapefile output.",
+    )
+    parser.add_argument(
+        "--output_coastal_csv",
+        type=str,
+        default=coastal_impact_csv,
+        help="File path to save landfall AR events coastal impact csv output.",
+    )
+    parser.add_argument(
+        "--output_log_csv",
+        type=str,
+        default=log_fp,
+        help="File path to save processing log csv output.",
+    )
 
     args = parser.parse_args()
 
@@ -1006,8 +1166,11 @@ if __name__ == "__main__":
         landfall_csv=args.output_landfall_csv,
         landfall_events_shp=args.output_events_shapefile,
         landfall_events_csv=args.output_events_csv,
+        coastal_impact_shp=args.output_coastal_shapefile,
+        coastal_impact_csv=args.output_coastal_csv,
+        log_fp=args.output_log_csv
     )
 
     print(
-        f"Processing complete! Full shapefile output written to {args.output_ar_shapefile}, with companion CSV file written to {args.output_csv}. All Alaska landfall ARs shapefile output written to {args.output_landfall_shapefile}, with companion CSV file written to {args.output_landfall_csv}. Condensed Alaska landfall ARs shapefile output written to {args.output_events_shapefile}, with companion CSV file written to {args.output_events_csv}."
+        f"Processing complete! Full shapefile output written to {args.output_ar_shapefile}, with companion CSV file written to {args.output_csv}. All Alaska landfall ARs shapefile output written to {args.output_landfall_shapefile}, with companion CSV file written to {args.output_landfall_csv}. Condensed Alaska landfall ARs shapefile output written to {args.output_events_shapefile}, with companion CSV file written to {args.output_events_csv}. AR event coastal impact shapefile output written to {args.output_coastal_shapefile}, with companion CSV file written to {args.output_coastal_csv}. Log file saved to {args.output_log_csv}."
     )
