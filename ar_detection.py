@@ -337,6 +337,39 @@ def get_directional_coherence(blob):
     pct_coherent = round((pixel_count / total_pixels) * 100)
     return blob.label, pct_coherent, mean_reference_deg
 
+def get_total_ivt_strength(blob):
+    """
+    Computes the total strength of a labeled region as the regional sum of IVT.
+
+    Parameters
+    ----------
+    blob : skimage.measure._regionprops.RegionProperties
+        Region properties object representing a labeled region.
+
+    Returns
+    -------
+    tuple
+        (label of the region, total IVT strength)
+    """
+    return blob.label, round(blob.image_intensity.sum())
+
+
+def get_relative_ivt_strength(blob):
+    """
+    Computes the relative strength of a labeled region as the regional sum of IVT divided by region area.
+
+    Parameters
+    ----------
+    blob : skimage.measure._regionprops.RegionProperties
+        Region properties object representing a labeled region.
+
+    Returns
+    -------
+    tuple
+        (label of the region, relative IVT strength)
+    """
+    return blob.label, round(blob.image_intensity.sum()/blob.area)
+
 
 def get_total_ivt_strength(blob):
     """
