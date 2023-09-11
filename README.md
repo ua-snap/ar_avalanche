@@ -27,8 +27,8 @@ The overall orientation of the object (i.e., the direction of the shape elongati
  - The `ar_detection.py` module contains a collection of AR detection functions that will filter AR candidates based on the criteria and create shapefile outputs of objects classified as ARs. These functions may be orchestrated from a notebook (see `AR_detection.ipynb`) or ran as a script. 
 
 ## Usage
-1. Register for a Climate Data Store (CDS) account and install the CDS API client according to the instructions [here].(https://cds.climate.copernicus.eu/api-how-to). Be sure to accept the user agreement. 
-2. Create a new conda environment using the `environment.yml` file in this codebase.
+1. Register for a Climate Data Store (CDS) account and install the CDS API client according to the instructions [here](https://cds.climate.copernicus.eu/api-how-to). Be sure to accept the user agreement. 
+2. Create a new conda environment using the `environment.yml` file in this codebase, or install packages manually from the list below.
 3. Set a local environment variable defining the data directory. If the directory does not yet exist, `config.py` will create it, e.g. `export AR_DATA_DIR=path/to/store/ar/data`
 5. Review parameters in `config.py` and adjust if desired. Note that there is a download request limit of 120,000 items, so adjusting the timestep or date range may overload the request and break the script.
 6. Execute `download.py`
@@ -36,3 +36,38 @@ The overall orientation of the object (i.e., the direction of the shape elongati
 8. Execute `ar_detection.py` or use `AR_detection.ipynb` to orchestrate the detection.
 9. Examine the results using the `AR_QC.ipynb` notebook.
 10. Explore spatiotemporal relationships between avalanches and AR events using the `AR_avalanche_exploration.ipynb` notebook.
+
+## Packages
+- xarray
+- pyproj
+- geopandas
+- pandas
+- tqdm
+- scipy
+- skimage
+- haversine
+- shapely
+- rasterio
+- cdsapi
+- matplotlib
+- seaborn
+- jupyterlab
+- dask
+- scikit-image
+- rioxarray
+
+## Figures  
+  
+Figure 1. Subsetting candidate regions before applying AR criteria. 
+Upper left: IVT magnitude of an individual timestep calculated from 6hr ERA5 data.
+Upper right: 90th percentile of IVT magnitude, calculated across all years in the dataset.
+Lower left: IVT magnitude after applying a threshold of 90th percentile IVT magnitude.
+Lower right: Contiguous regions identified and labeled after applying threshold. Each individual region will be evaluated against the AR criteria defined in `config.py`.  
+
+![AR thresholding figure](ar_thresholding.png)
+  
+    
+Figure 2. Flowchart of AR detection processing.  
+  
+    
+![Flowchart figure](flowchart.png)
