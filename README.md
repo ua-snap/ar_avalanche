@@ -38,23 +38,22 @@ The overall orientation of the object (i.e., the direction of the shape elongati
 10. Explore spatiotemporal relationships between avalanches and AR events using the `AR_avalanche_exploration.ipynb` notebook.
 
 ## Packages
+- rasterio
+- rioxarray
 - xarray
 - pyproj
 - geopandas
 - pandas
 - tqdm
 - scipy
-- skimage
 - haversine
 - shapely
-- rasterio
 - cdsapi
 - matplotlib
 - seaborn
 - jupyterlab
 - dask
 - scikit-image
-- rioxarray
 
 ## Figures  
   

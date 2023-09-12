@@ -80,7 +80,7 @@ era5_fps = [DOWNLOAD_DIR.joinpath(str(v + ".nc")) for v in varnames]
 era5_merged = DOWNLOAD_DIR.joinpath("era5_merged.nc")
 
 # use reduced time spans, smaller bboxes for testing
-start_year = 1992
+start_year = 1980
 end_year = 2022
 bbox = [10, -179, 66, -120]
 
