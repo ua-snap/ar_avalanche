@@ -1,9 +1,9 @@
 # Atmospheric Rivers and Avalanches
 
 ## Background
-This codebase will download [ERA5 6 hourly pressure level data](https://cds.climate.copernicus.eu/cdsapp#!/dataset/reanalysis-era5-pressure-levels?tab=overview) in the vicinity of Alaska and apply an atmospheric river (AR) detection algorithm. Outputs will include a datacube of AR objects and multiple attributed shapefiles for future work correlating avalanche events to ARs. 
+This codebase will download [ERA5 6 hourly pressure level data](https://cds.climate.copernicus.eu/cdsapp#!/dataset/reanalysis-era5-pressure-levels?tab=overview) in the vicinity of Alaska and apply an atmospheric river (AR) detection algorithm. Outputs include a multiple attributed shapefiles for future work correlating avalanche events (or other phenomena) to ARs.
 
-The AR detection algorithm used here is adapted from [Guan & Waliser (2015)](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1002/2015JD024257) and uses a combination of vertically integrated water vapor transport (IVT), geometric shape, and directional criteria to define ARs. See the annotated bibilography document for more detail and other references. Users of this codebase should know the following information about atmospheric river criteria:
+The AR detection algorithm used here is adapted from [Guan & Waliser (2015)](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1002/2015JD024257) and uses a combination of vertically integrated water vapor transport (IVT), geometric shape, and directional criteria to define ARs. See the annotated bibilography document for more detail and other references. Users of this codebase should know the following information about AR criteria:
 
 All of the AR criteria proposed by Guan and Waliser (2015) either judge the geometry of the candidate AR object and/or measure some parameter of integrated water vapor transport (magnitude, direction, and poleward component). Each candidate AR object represents a specific time (six hour resolution) slice of the IVT data where contiguous groups of grid cells in which the magntiude the target quantile are labeled with unqiue integers >=1. The 0 value is reserved to mask the region that did not exceed the IVT quantile threshold.
 
@@ -28,8 +28,8 @@ The overall orientation of the object (i.e., the direction of the shape elongati
 
 ## Usage
 1. Register for a Climate Data Store (CDS) account and install the CDS API client according to the instructions [here](https://cds.climate.copernicus.eu/api-how-to). Be sure to accept the user agreement. 
-2. Create a new conda environment using the `environment.yml` file in this codebase, or install packages manually from the list below.
-3. Set a local environment variable defining the data directory. If the directory does not yet exist, `config.py` will create it, e.g. `export AR_DATA_DIR=path/to/store/ar/data`
+2. Create a new conda environment using the `environment.yml` file in this codebase, or install packages manually from the list below. (If you run into problems building the environment using conda, or experience errors when running `ar_detection.py`, we recommend trying [mamba](https://github.com/mamba-org/mamba) to build your environment before attempting to debug any code.)
+3. Set a local environment variable defining the data directory (e.g. `export AR_DATA_DIR=path/to/store/ar/data`).
 5. Review parameters in `config.py` and adjust if desired. Note that there is a download request limit of 120,000 items, so adjusting the timestep or date range may overload the request and break the script.
 6. Execute `download.py`
 7. Execute `compute_ivt.py`
@@ -69,4 +69,4 @@ Lower right: Contiguous regions identified and labeled after applying threshold.
 Figure 2. Flowchart of AR detection processing.  
   
     
-![Flowchart figure](flowchart.png)
+![FLowchart figure](flowchart.png)
