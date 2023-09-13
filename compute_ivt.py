@@ -12,6 +12,7 @@ from tqdm import tqdm
 
 from config import era5_fps, era5_merged, ar_params, ard_fp
 
+
 def merge_components(era5_fps, era5_merged):
     """Merge the eastward (u) and northward (v) vapor flux .nc files by their shared coordinates, and output to a new .nc file.
 
@@ -43,7 +44,7 @@ def compute_magnitude(u, v):
     xarray.DataArray
         Total magnitude of vapor transport
     """
-    return xr.apply_ufunc(np.hypot, u, v, dask='parallelized')
+    return xr.apply_ufunc(np.hypot, u, v, dask="parallelized")
 
 
 def compute_direction(u, v):
@@ -61,7 +62,7 @@ def compute_direction(u, v):
         Direction the vapor transport is coming from in degrees with respect to true north (0=north, 90=east, 180=south, 270=west)
     """
     func = lambda x, y: 270 - ((180 / np.pi) * np.arctan2(x, y))
-    return xr.apply_ufunc(func, u, v, dask='parallelized')
+    return xr.apply_ufunc(func, u, v, dask="parallelized")
 
 
 def generate_start_end_doys(day_of_year, window):
@@ -77,16 +78,16 @@ def generate_start_end_doys(day_of_year, window):
     Returns
     -------
     tuple
-        Two-tuple of integer DOYs representing the start and end of the time window 
+        Two-tuple of integer DOYs representing the start and end of the time window
     """
     half_window = window // 2
     # check leap year
-    is_leap_year = (day_of_year == 366)
+    is_leap_year = day_of_year == 366
     total_days = 366 if is_leap_year else 365
-    
+
     start_day_of_year = (day_of_year - half_window) % total_days
     end_day_of_year = (day_of_year + half_window) % total_days
-    
+
     return start_day_of_year, end_day_of_year
 
 
@@ -109,20 +110,24 @@ def compute_period_of_record_quantile(da, day_of_year, window, target_quantile):
     result
         xarray.DataArray containing the q-th quantile of IVT magnitude for the given DOY.
     """
-    leap_year = (day_of_year == 366)
-    
+    leap_year = day_of_year == 366
+
     start_day_of_year, end_day_of_year = generate_start_end_doys(day_of_year, window)
-    
+
     if day_of_year >= window // 2 and 365 - day_of_year >= window // 2:
         # subset without wrapping the year boundary (e.g., DOY is 180)
-        subset = da.sel(time=((da.doy >= start_day_of_year) & (da.doy <= end_day_of_year)))
+        subset = da.sel(
+            time=((da.doy >= start_day_of_year) & (da.doy <= end_day_of_year))
+        )
     else:
         # subset with wrapping the year boundary (e.g., DOY is 360, window is 30 days)
-        subset = da.sel(time=((da.doy >= start_day_of_year) | (da.doy <= end_day_of_year)))
+        subset = da.sel(
+            time=((da.doy >= start_day_of_year) | (da.doy <= end_day_of_year))
+        )
 
     # for DOYs other than 366, omit values from DOY 366 from the results
     if not leap_year:
-        mask = subset['doy'] != 366
+        mask = subset["doy"] != 366
         subset = subset.where(mask, drop=True)
 
     result = subset.reduce(np.nanquantile, q=target_quantile, dim="time")
@@ -152,7 +157,9 @@ def compute_quantiles_for_doy_range(da, doy_start, doy_stop, window, target_quan
     """
     quantile_results = []
     for day_of_year in tqdm(range(doy_start, doy_stop)):
-        doy_quantile = compute_period_of_record_quantile(da, day_of_year, window, target_quantile)
+        doy_quantile = compute_period_of_record_quantile(
+            da, day_of_year, window, target_quantile
+        )
         quantile_results.append(doy_quantile)
 
     for i, quantile_result in enumerate(quantile_results):
@@ -160,7 +167,7 @@ def compute_quantiles_for_doy_range(da, doy_start, doy_stop, window, target_quan
         quantile_results[i] = doy_result
 
     # concatenate list of DataArrays along the 'doy' dimension
-    combined_da = xr.concat(quantile_results, dim='doy')
+    combined_da = xr.concat(quantile_results, dim="doy")
     return combined_da
 
 
@@ -184,7 +191,6 @@ def add_time_coordinate_to_ivt_quantile(ds):
     ivt_quantile_time = ivt_quantile_time.assign_coords(time=ds["time"])
 
     return ivt_quantile_time
-
 
 
 def compute_full_ivt_datacube(era5_merged, ar_params, ard_fp):
@@ -216,11 +222,13 @@ def compute_full_ivt_datacube(era5_merged, ar_params, ard_fp):
 
         time_window_days = ar_params["window"] * 2
         qth_target_quantile = ar_params["ivt_percentile"] / 100
-        
-        dsc["ivt_quantile"] = compute_quantiles_for_doy_range(dsc["ivt_mag"], 1, 367, time_window_days, qth_target_quantile)
+
+        dsc["ivt_quantile"] = compute_quantiles_for_doy_range(
+            dsc["ivt_mag"], 1, 367, time_window_days, qth_target_quantile
+        )
 
         dsc["ivt_quantile"] = add_time_coordinate_to_ivt_quantile(dsc)
-        
+
         # the raw east component is not needed for AR detection, but north is
         dsc = dsc.drop_vars(["p71.162"])
         # DOY dimension also no longer needed after time coordinate mapping
@@ -234,6 +242,8 @@ if __name__ == "__main__":
     merge_components(era5_fps, era5_merged)
     print(f"Merge complete! Merged ERA5 data saved to {era5_merged}.")
 
-    print(f"Computing IVT magnitude, direction, and the {ar_params['ivt_percentile'] / 100} IVT quantile for a time window of {ar_params['window'] * 2} days centered on each day-of-year.")
+    print(
+        f"Computing IVT magnitude, direction, and the {ar_params['ivt_percentile'] / 100} IVT quantile for a time window of {ar_params['window'] * 2} days centered on each day-of-year."
+    )
     compute_full_ivt_datacube(era5_merged, ar_params, ard_fp)
     print(f"Computation complete! AR detection parameters saved to {ard_fp}")
