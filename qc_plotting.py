@@ -110,7 +110,7 @@ def count_ars(raw, landfall, events, points):
     print("\n")
     print(
         "On average, we detected "
-        + str(len(p) / 30)
+        + str(len(p) / (end_year - start_year))
         + " yearly AR events with a coastal impact points."
     )
 
