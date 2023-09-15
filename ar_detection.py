@@ -865,7 +865,7 @@ def landfall_ars_export(
         # round results
         res = res.round(
             {
-                "ratio_m": 0,
+                "ratio_m": 1,
                 "len_km_m": 0,
                 "orient_m": 0,
                 "poleward_m": 0,
