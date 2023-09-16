@@ -7,22 +7,17 @@ from config import dataset, varnames, era5_kwargs, era5_fps, api_credentials_che
 
 
 def download(dataset, vars, kwargs, fps):
-    
     api_credentials_check()
-    
+
     c = cdsapi.Client()
-    
+
     for v, fp in zip(vars, fps):
         kwargs["variable"] = v
 
         print("Downloading " + dataset + " : " + v + " to " + str(fp) + " ... ")
 
-        c.retrieve(
-            dataset,
-            kwargs,
-            fp
-        )
-    
+        c.retrieve(dataset, kwargs, fp)
+
         if Path(fp).exists:
             print("Download complete! ERA5 data saved to: " + str(fp))
         else:
@@ -32,5 +27,4 @@ def download(dataset, vars, kwargs, fps):
 
 
 if __name__ == "__main__":
-    
     fp = download(dataset, varnames, era5_kwargs, era5_fps)
