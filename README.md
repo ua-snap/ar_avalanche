@@ -18,7 +18,7 @@ If more than half of the grid cells have IVT deviating more than 45° from the o
 ### Object Mean Meridional IVT
 Considering the notion that ARs transport moisture from low to high latitudes, an object is discarded if the mean IVT does not have an appreciable poleward component (>50 kg m−1 s−1).
 ### Consistency Between Object Mean IVT Direction and Overall Orientation
-The overall orientation of the object (i.e., the direction of the shape elongation) is the mean azimuth of the arc connecting the two boundary grid cells with the maximum great circle distance. An object is discarded if the direction of mean IVT deviates from the overall orientation by more than 45°. This is aimed to filter objects where the IVT does not transport in the direction of object elongation.
+The overall orientation of the object (i.e., the direction of the shape elongation) is the geographic azimuth along the major axis of an ellipse drawn around the object. An object is discarded if the direction of mean IVT deviates from the overall orientation by more than 45°. This is aimed to filter objects where the IVT does not transport in the direction of object elongation.
 
 ## Structure
  - All download specifications and model parameters are defined in `config.py`.
